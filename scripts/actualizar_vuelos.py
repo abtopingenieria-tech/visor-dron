@@ -1,19 +1,35 @@
-"""Agrega o reemplaza un vuelo en vuelos.json y quita los vuelos de ejemplo.
-Uso: python3 scripts/actualizar_vuelos.py FECHA NOMBRE URL"""
+"""Agrega o reemplaza vuelos en vuelos.json y quita los vuelos de ejemplo.
+Uso por consola: python3 scripts/actualizar_vuelos.py FECHA NOMBRE URL"""
 import json, re, sys
 
-fecha, nombre, url = sys.argv[1], sys.argv[2].strip(), sys.argv[3]
-if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", fecha):
-    sys.exit(f"Fecha inválida: {fecha!r}. Usa el formato AAAA-MM-DD, por ejemplo 2026-10-21.")
+ARCHIVO = "vuelos.json"
 
-with open("vuelos.json", encoding="utf-8") as f:
-    cfg = json.load(f)
 
-vuelos = [v for v in cfg.get("vuelos", []) if not v["url"].startswith("ejemplo/") and v["fecha"] != fecha]
-vuelos.append({"fecha": fecha, "nombre": nombre, "url": url})
-cfg["vuelos"] = sorted(vuelos, key=lambda v: v["fecha"])
+def leer():
+    with open(ARCHIVO, encoding="utf-8") as f:
+        return json.load(f)
 
-with open("vuelos.json", "w", encoding="utf-8") as f:
-    json.dump(cfg, f, ensure_ascii=False, indent=2)
-    f.write("\n")
-print(f"vuelos.json: {len(cfg['vuelos'])} vuelo(s)")
+
+def fechas_reales():
+    return {v["fecha"] for v in leer().get("vuelos", []) if not v["url"].startswith("ejemplo/")}
+
+
+def agregar(fecha, nombre, url):
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", fecha):
+        raise ValueError(f"Fecha inválida: {fecha!r}. Usa el formato AAAA-MM-DD, por ejemplo 2026-10-21.")
+    cfg = leer()
+    vuelos = [v for v in cfg.get("vuelos", []) if not v["url"].startswith("ejemplo/") and v["fecha"] != fecha]
+    vuelos.append({"fecha": fecha, "nombre": (nombre or "").strip(), "url": url})
+    cfg["vuelos"] = sorted(vuelos, key=lambda v: v["fecha"])
+    with open(ARCHIVO, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+    return len(cfg["vuelos"])
+
+
+if __name__ == "__main__":
+    try:
+        n = agregar(sys.argv[1], sys.argv[2], sys.argv[3])
+    except ValueError as e:
+        sys.exit(str(e))
+    print(f"vuelos.json: {n} vuelo(s)")

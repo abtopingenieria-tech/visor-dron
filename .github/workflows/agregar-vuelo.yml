@@ -1,19 +1,22 @@
-name: Agregar vuelo
+name: Agregar vuelos
 
 # Se ejecuta a mano desde la pestaña Actions → "Agregar vuelo" → "Run workflow".
-# Descarga el ortomosaico desde un link compartido, lo convierte a COG liviano,
-# lo sube a Cloudflare R2 y lo agrega a vuelos.json (el sitio se actualiza solo).
+# Descarga uno o varios ortomosaicos desde un link compartido, los convierte a COG liviano,
+# los sube a Cloudflare R2 y los agrega a vuelos.json (el sitio se actualiza solo).
+# Con una carpeta de Google Drive procesa todos los .tif; la fecha y el nombre salen del
+# nombre de cada archivo, por ejemplo "2026-10-21 Losa piso 1.tif".
 on:
   workflow_dispatch:
     inputs:
       link:
-        description: "Link compartido del ortomosaico GeoTIFF (Google Drive, Dropbox, Box o link directo)"
+        description: "Link compartido de un archivo .tif o de una CARPETA de Google Drive con varios"
         required: true
       fecha:
-        description: "Fecha del vuelo (AAAA-MM-DD, por ejemplo 2026-10-21)"
-        required: true
+        description: "Fecha del vuelo (AAAA-MM-DD). Vacío = se toma del nombre del archivo. Se ignora con carpetas"
+        required: false
+        default: ""
       nombre:
-        description: "Nombre corto del vuelo (por ejemplo: Losa piso 1)"
+        description: "Nombre corto (ej: Losa piso 1). Vacío = se toma del nombre del archivo. Se ignora con carpetas"
         required: false
         default: ""
       resolucion:
@@ -41,7 +44,7 @@ jobs:
 
       - name: Revisar datos
         run: |
-          if ! [[ "$FECHA" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+          if [ -n "$FECHA" ] && ! [[ "$FECHA" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
             echo "::error::La fecha debe tener formato AAAA-MM-DD (por ejemplo 2026-10-21). Recibí: $FECHA"; exit 1
           fi
           for s in R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY; do
@@ -62,58 +65,29 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq gdal-bin
-          pip install --quiet gdown
+          pip install --quiet gdown==5.2.0
           gdal_translate --version
 
-      - name: Descargar ortomosaico
+      - name: Descargar, convertir y publicar
         env:
           LINK: ${{ inputs.link }}
-        run: |
-          mkdir -p trabajo
-          case "$LINK" in
-            *drive.google.com*)
-              gdown --fuzzy "$LINK" -O trabajo/entrada.tif ;;
-            *dropbox.com*)
-              url="${LINK/dl=0/dl=1}"; [[ "$url" == *dl=1* ]] || url="$url$([[ "$url" == *\?* ]] && echo '&' || echo '?')dl=1"
-              curl -fL --retry 3 -o trabajo/entrada.tif "$url" ;;
-            *box.com/s/*)
-              curl -fL --retry 3 -o trabajo/entrada.tif "${LINK/\/s\//\/shared\/static\/}" ;;
-            *)
-              curl -fL --retry 3 -o trabajo/entrada.tif "$LINK" ;;
-          esac
-          ls -lh trabajo/entrada.tif
-          if ! gdalinfo trabajo/entrada.tif > /dev/null 2>&1; then
-            echo "::error::Lo descargado no es un GeoTIFF. Revisa que el link esté compartido como 'cualquier persona con el link' y que el archivo sea .tif (ECW no se puede convertir aquí)."
-            head -c 300 trabajo/entrada.tif; exit 1
-          fi
-
-      - name: Convertir a COG
-        env:
           FECHA: ${{ inputs.fecha }}
+          NOMBRE: ${{ inputs.nombre }}
           RES: ${{ inputs.resolucion }}
-        run: scripts/convertir.sh trabajo/entrada.tif "trabajo/$FECHA.tif" "$RES"
-
-      - name: Subir a Cloudflare R2
-        env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: auto
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-          FECHA: ${{ inputs.fecha }}
-        run: |
-          aws s3 cp "trabajo/$FECHA.tif" "s3://$R2_BUCKET/$FECHA.tif" \
-            --endpoint-url "https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com" --content-type image/tiff
+        run: python3 scripts/procesar.py
 
-      - name: Agregar a vuelos.json
-        env:
-          FECHA: ${{ inputs.fecha }}
-          NOMBRE: ${{ inputs.nombre }}
+      # Guarda los vuelos que sí se agregaron, aunque alguno de la carpeta haya fallado
+      - name: Guardar vuelos.json
+        if: always()
         run: |
-          python3 scripts/actualizar_vuelos.py "$FECHA" "$NOMBRE" "$R2_PUBLIC_URL/$FECHA.tif"
+          git diff --quiet vuelos.json && { echo "Sin cambios en vuelos.json"; exit 0; }
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add vuelos.json
-          git commit -m "Agrega vuelo $FECHA ${NOMBRE:+($NOMBRE)}" || echo "Sin cambios en vuelos.json"
+          git commit -m "Agrega vuelos desde la acción Agregar vuelos"
+          git pull --rebase -q
           git push
-          echo "### Vuelo $FECHA agregado" >> "$GITHUB_STEP_SUMMARY"
-          echo "El sitio se actualiza en 1 o 2 minutos." >> "$GITHUB_STEP_SUMMARY"

@@ -6,26 +6,28 @@ Cualquier persona con el link puede verlo: https://abtopingenieria-tech.github.i
 
 - `index.html`: el visor.
 - `vuelos.json`: la lista de vuelos (se actualiza sola al agregar un vuelo).
-- `.github/workflows/agregar-vuelo.yml`: convierte y publica un vuelo nuevo.
+- `.github/workflows/agregar-vuelo.yml`: convierte y publica vuelos nuevos (uno o una carpeta completa).
 - `ejemplo/`: 3 vuelos simulados; desaparecen del visor al agregar el primer vuelo real.
 
-## Agregar un vuelo (sin instalar nada)
+## Agregar vuelos (sin instalar nada)
 
-1. Sube el ortomosaico **GeoTIFF** original a Google Drive (o Dropbox/Box) y compártelo como
+**Nombra cada archivo con su fecha y un nombre corto**, por ejemplo `2026-10-21 Losa piso 1.tif`.
+El visor toma de ahí la fecha y el nombre que muestra en la línea de tiempo.
+
+1. Sube los `.tif` a una carpeta de Google Drive y comparte **la carpeta** (o un solo archivo) como
    **"Cualquier persona con el enlace"**. Copia el link.
-2. En GitHub entra a **Actions → Agregar vuelo → Run workflow** y completa:
-   - **link**: el link compartido.
-   - **fecha**: fecha del vuelo, `AAAA-MM-DD`.
-   - **nombre**: algo corto, por ejemplo `Losa piso 1`.
-   - **resolución** (opcional): por ejemplo `0.05` para bajar a 5 cm/px y achicar más el archivo.
-3. Aprieta **Run workflow**. En unos minutos (más si el archivo pesa varios GB) aparece un ✓ verde y el vuelo
-   ya está en el visor. Si aparece una ✗ roja, entra al run y lee el mensaje en rojo.
+2. En GitHub entra a **Actions → Agregar vuelos → Run workflow**, pega el link en **link** y aprieta **Run workflow**.
+   Los demás campos son opcionales: fecha y nombre solo sirven al subir un archivo suelto que no los tenga en su nombre;
+   **resolución** (por ejemplo `0.05`) baja el detalle para achicar más.
+3. Espera el ✓ verde (varios minutos por archivo grande) y recarga el visor. El resumen del run muestra qué se agregó.
 
-Qué hace: descarga el archivo, lo convierte a COG con compresión JPEG (10 a 30 veces más liviano, igual en pantalla),
-lo sube a Cloudflare R2 y lo agrega a `vuelos.json`. Si repites una fecha, reemplaza ese vuelo.
+Con una carpeta se procesan todos los `.tif` de una vez. Las fechas que ya están en el visor se saltan, así que puedes
+dejar todos los vuelos en la misma carpeta e ir agregando nuevos. Si repites la fecha de un archivo suelto, reemplaza ese vuelo.
 
-**ECW:** no se puede convertir en la nube (es un formato con licencia). Exporta el ortomosaico como GeoTIFF desde tu
-software de fotogrametría, o conviértelo con `convertir.bat` (abajo).
+Qué hace: descarga cada archivo, lo convierte a COG con compresión JPEG (10 a 30 veces más liviano, igual en pantalla),
+lo sube a Cloudflare R2 y lo agrega a `vuelos.json`.
+
+**ECW:** no se puede convertir en la nube (es un formato con licencia). Conviértelo antes con `convertir.bat` (abajo).
 
 ## Configuración única: claves de Cloudflare R2
 
@@ -57,8 +59,8 @@ El ECW no se puede abrir en la nube, así que se convierte en tu computador (Win
 1. Instala QGIS una vez desde https://qgis.org/download/ (no hace falta abrirlo nunca; trae el lector de ECW).
 2. Descarga [`convertir.bat`](convertir.bat) (botón ↓ "Download raw file") y cópialo a la carpeta donde están los `.ecw`.
 3. Hazle **doble clic**. Convierte todos los `.ecw` y `.tif` de esa carpeta y deja los livianos en la subcarpeta `web`.
-4. Sube los archivos de `web` a Google Drive y usa la acción **Agregar vuelo** como siempre (detecta que ya vienen
-   optimizados y no los vuelve a comprimir).
+4. Renombra los archivos de `web` con su fecha (`2026-10-21 Losa piso 1.tif`), súbelos a tu carpeta de Drive y usa la
+   acción **Agregar vuelos** (detecta que ya vienen optimizados y no los vuelve a comprimir).
 
 ## Sistemas de coordenadas
 
