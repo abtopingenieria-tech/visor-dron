@@ -1,0 +1,119 @@
+name: Agregar vuelo
+
+# Se ejecuta a mano desde la pestaña Actions → "Agregar vuelo" → "Run workflow".
+# Descarga el ortomosaico desde un link compartido, lo convierte a COG liviano,
+# lo sube a Cloudflare R2 y lo agrega a vuelos.json (el sitio se actualiza solo).
+on:
+  workflow_dispatch:
+    inputs:
+      link:
+        description: "Link compartido del ortomosaico GeoTIFF (Google Drive, Dropbox, Box o link directo)"
+        required: true
+      fecha:
+        description: "Fecha del vuelo (AAAA-MM-DD, por ejemplo 2026-10-21)"
+        required: true
+      nombre:
+        description: "Nombre corto del vuelo (por ejemplo: Losa piso 1)"
+        required: false
+        default: ""
+      resolucion:
+        description: "Resolución en metros por píxel para achicar más (por ejemplo 0.05). Vacío = original"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: agregar-vuelo
+  cancel-in-progress: false
+
+env:
+  R2_BUCKET: visor-dron
+  R2_PUBLIC_URL: https://pub-85f1f1b1acc34a97a5cd365a422a5baa.r2.dev
+
+jobs:
+  agregar:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Revisar datos
+        run: |
+          if ! [[ "$FECHA" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+            echo "::error::La fecha debe tener formato AAAA-MM-DD (por ejemplo 2026-10-21). Recibí: $FECHA"; exit 1
+          fi
+          for s in R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY; do
+            if [ -z "${!s}" ]; then echo "::error::Falta el secreto $s en Settings → Secrets and variables → Actions (ver README)."; exit 1; fi
+          done
+        env:
+          FECHA: ${{ inputs.fecha }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+
+      - name: Liberar espacio en disco
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Instalar GDAL
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gdal-bin
+          pip install --quiet gdown
+          gdal_translate --version
+
+      - name: Descargar ortomosaico
+        env:
+          LINK: ${{ inputs.link }}
+        run: |
+          mkdir -p trabajo
+          case "$LINK" in
+            *drive.google.com*)
+              gdown --fuzzy "$LINK" -O trabajo/entrada.tif ;;
+            *dropbox.com*)
+              url="${LINK/dl=0/dl=1}"; [[ "$url" == *dl=1* ]] || url="$url$([[ "$url" == *\?* ]] && echo '&' || echo '?')dl=1"
+              curl -fL --retry 3 -o trabajo/entrada.tif "$url" ;;
+            *box.com/s/*)
+              curl -fL --retry 3 -o trabajo/entrada.tif "${LINK/\/s\//\/shared\/static\/}" ;;
+            *)
+              curl -fL --retry 3 -o trabajo/entrada.tif "$LINK" ;;
+          esac
+          ls -lh trabajo/entrada.tif
+          if ! gdalinfo trabajo/entrada.tif > /dev/null 2>&1; then
+            echo "::error::Lo descargado no es un GeoTIFF. Revisa que el link esté compartido como 'cualquier persona con el link' y que el archivo sea .tif (ECW no se puede convertir aquí)."
+            head -c 300 trabajo/entrada.tif; exit 1
+          fi
+
+      - name: Convertir a COG
+        env:
+          FECHA: ${{ inputs.fecha }}
+          RES: ${{ inputs.resolucion }}
+        run: scripts/convertir.sh trabajo/entrada.tif "trabajo/$FECHA.tif" "$RES"
+
+      - name: Subir a Cloudflare R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          FECHA: ${{ inputs.fecha }}
+        run: |
+          aws s3 cp "trabajo/$FECHA.tif" "s3://$R2_BUCKET/$FECHA.tif" \
+            --endpoint-url "https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com" --content-type image/tiff
+
+      - name: Agregar a vuelos.json
+        env:
+          FECHA: ${{ inputs.fecha }}
+          NOMBRE: ${{ inputs.nombre }}
+        run: |
+          python3 scripts/actualizar_vuelos.py "$FECHA" "$NOMBRE" "$R2_PUBLIC_URL/$FECHA.tif"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add vuelos.json
+          git commit -m "Agrega vuelo $FECHA ${NOMBRE:+($NOMBRE)}" || echo "Sin cambios en vuelos.json"
+          git push
+          echo "### Vuelo $FECHA agregado" >> "$GITHUB_STEP_SUMMARY"
+          echo "El sitio se actualiza en 1 o 2 minutos." >> "$GITHUB_STEP_SUMMARY"

@@ -1,62 +1,66 @@
 # Visor de Avance Dron
 
-Sitio web estático que muestra ortomosaicos de dron de distintas fechas sobre un mapa y permite compararlos
-(deslizador, lado a lado o transparencia). Cualquier persona con el link puede verlo; no necesita cuenta.
+Sitio web que muestra ortomosaicos de dron de distintas fechas sobre un mapa y permite recorrerlos
+con una línea de tiempo o compararlos (deslizador, lado a lado o transparencia).
+Cualquier persona con el link puede verlo: https://abtopingenieria-tech.github.io/visor-dron/
 
-- `index.html`: el visor. No hay que tocarlo.
-- `vuelos.json`: la lista de vuelos. Es lo único que se edita para agregar una fecha.
+- `index.html`: el visor.
+- `vuelos.json`: la lista de vuelos (se actualiza sola al agregar un vuelo).
+- `.github/workflows/agregar-vuelo.yml`: convierte y publica un vuelo nuevo.
+- `ejemplo/`: 3 vuelos simulados; desaparecen del visor al agregar el primer vuelo real.
 
-## Vuelos de ejemplo
+## Agregar un vuelo (sin instalar nada)
 
-La carpeta `ejemplo/` trae 3 ortomosaicos simulados para ver el visor funcionando. Cuando cargues tus vuelos, bórralos de `vuelos.json` (y si quieres, borra la carpeta).
+1. Sube el ortomosaico **GeoTIFF** original a Google Drive (o Dropbox/Box) y compártelo como
+   **"Cualquier persona con el enlace"**. Copia el link.
+2. En GitHub entra a **Actions → Agregar vuelo → Run workflow** y completa:
+   - **link**: el link compartido.
+   - **fecha**: fecha del vuelo, `AAAA-MM-DD`.
+   - **nombre**: algo corto, por ejemplo `Losa piso 1`.
+   - **resolución** (opcional): por ejemplo `0.05` para bajar a 5 cm/px y achicar más el archivo.
+3. Aprieta **Run workflow**. En unos minutos (más si el archivo pesa varios GB) aparece un ✓ verde y el vuelo
+   ya está en el visor. Si aparece una ✗ roja, entra al run y lee el mensaje en rojo.
 
-## Agregar un vuelo nuevo
+Qué hace: descarga el archivo, lo convierte a COG con compresión JPEG (10 a 30 veces más liviano, igual en pantalla),
+lo sube a Cloudflare R2 y lo agrega a `vuelos.json`. Si repites una fecha, reemplaza ese vuelo.
 
-### 1. Convertir el ortomosaico a GeoTIFF optimizado (COG)
+**ECW:** no se puede convertir en la nube (es un formato con licencia). Exporta el ortomosaico como GeoTIFF desde tu
+software de fotogrametría, o usa `convertir.bat` (abajo).
 
-Los TIFF que exporta el software de fotogrametría suelen venir sin comprimir y pesan varios GB.
-Convertidos a COG con compresión JPEG quedan entre 10 y 30 veces más livianos, sin diferencia visible en pantalla.
-Los navegadores tampoco leen ECW, así que los ECW también pasan por este paso.
+## Configuración única: claves de Cloudflare R2
 
-**Forma fácil (Windows, con QGIS instalado):**
-1. Copia `convertir.bat` a la carpeta donde están tus `.tif` o `.ecw`.
-2. Abre **OSGeo4W Shell** (menú inicio, viene con QGIS) y entra a esa carpeta con `cd "C:\ruta\a\la\carpeta"`.
-3. Escribe `convertir.bat`. Los archivos listos quedan en la subcarpeta `web`.
-4. Nombra cada archivo con la fecha del vuelo, por ejemplo `2026-10-21.tif`.
+La acción necesita permiso para subir archivos al bucket `visor-dron`.
 
-Para archivos aún más livianos, edita `convertir.bat` y pon `set RES=0.05` (5 cm/px). Para ver el avance de una obra suele bastar.
+1. En Cloudflare → **R2 object storage** → **Manage API tokens** (o "API Tokens" en la página de R2) →
+   **Create Account API token**.
+   - Permisos: **Object Read & Write**.
+   - Bucket: solo `visor-dron`.
+2. Al crearlo, Cloudflare muestra **Access Key ID**, **Secret Access Key** y el **Account ID**
+   (también aparece en la URL del panel: `dash.cloudflare.com/<ACCOUNT_ID>/r2`). Cópialos.
+3. En GitHub → **Settings → Secrets and variables → Actions → New repository secret**, crea tres secretos:
+   `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`.
 
-**Comando suelto:**
-`gdal_translate entrada.tif salida.tif -b 1 -b 2 -b 3 -mask 4 -of COG -co COMPRESS=JPEG -co QUALITY=85`
-(la banda 4 es la transparencia; si tu archivo solo tiene 3 bandas, quita `-mask 4`).
+Configuración del bucket (ya hecha): acceso público por `r2.dev` y política CORS:
+```json
+[{ "AllowedOrigins": ["*"], "AllowedMethods": ["GET", "HEAD"], "AllowedHeaders": ["Range"], "ExposeHeaders": ["Content-Range", "Content-Length", "Accept-Ranges"] }]
+```
 
-**Cuánto cabe:** el plan gratis de R2 trae 10 GB. Un ortomosaico de 3 GB sin comprimir queda en 150 a 300 MB, o sea unos 30 a 60 vuelos. Pasado eso, R2 cobra US$ 0,015 por GB al mes (100 GB ≈ US$ 1,5 al mes).
+## Cuánto cabe
 
-### 2. Subirlo a Cloudflare R2
+El plan gratis de R2 trae 10 GB. Un ortomosaico de 3 GB sin comprimir queda en unos 150 a 300 MB, o sea 30 a 60 vuelos.
+Pasado eso, R2 cobra US$ 0,015 por GB al mes (100 GB ≈ US$ 1,5 al mes).
 
-1. En el panel de Cloudflare → **R2** → tu bucket → **Upload** y sube el `.tif`.
-2. Copia su URL pública (`https://pub-xxxx.r2.dev/2026-10-21.tif`).
+## Alternativa local: `convertir.bat`
 
-Configuración única del bucket (solo la primera vez):
-- **Settings → Public access**: activar el dominio `r2.dev` (o un dominio propio).
-- **Settings → CORS policy**:
-  ```json
-  [{ "AllowedOrigins": ["*"], "AllowedMethods": ["GET", "HEAD"], "AllowedHeaders": ["Range"], "ExposeHeaders": ["Content-Range", "Content-Length", "Accept-Ranges"] }]
-  ```
+Si prefieres convertir en tu computador (por ejemplo para archivos ECW), con QGIS instalado:
+copia `convertir.bat` a la carpeta de tus ortomosaicos, abre **OSGeo4W Shell**, entra a esa carpeta
+(`cd /d "D:\Vuelos\Obra"`) y escribe `convertir.bat`. Los archivos quedan en `web\`; súbelos al bucket
+y agrégalos a `vuelos.json` a mano.
 
-### 3. Agregarlo a `vuelos.json`
-
-Añade una línea con la fecha (AAAA-MM-DD), un nombre y la URL. El visor ordena por fecha y por defecto compara los dos últimos vuelos.
-
-## Compartir
-
-Envía el link del sitio. El botón **Copiar link** incluye las fechas y el modo elegidos, así quien lo abre ve la misma comparación.
-
-## Sistemas de coordenadas aceptados
+## Sistemas de coordenadas
 
 UTM WGS84 (EPSG:326xx y 327xx), SIRGAS 2000 UTM sur (EPSG:31977 a 31985) y Web Mercator (EPSG:3857).
-Si tu ortomosaico usa otro, reprojéctalo a uno de estos al exportar.
 
 ## Nota
 
-`index.html` solo funciona publicado en un sitio web (GitHub Pages). Si lo abres directo desde el computador se queda en "Cargando vuelos…".
+`index.html` solo funciona publicado en un sitio web. Abierto directo desde el computador se queda en "Cargando vuelos…".
