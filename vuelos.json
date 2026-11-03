@@ -1,0 +1,8 @@
+{
+  "titulo": "Visor de Avance Dron",
+  "vuelos": [
+    { "fecha": "2026-08-12", "nombre": "Ejemplo · Movimiento de tierra", "url": "ejemplo/2026-08-12.tif" },
+    { "fecha": "2026-09-16", "nombre": "Ejemplo · Fundaciones", "url": "ejemplo/2026-09-16.tif" },
+    { "fecha": "2026-10-21", "nombre": "Ejemplo · Techumbre", "url": "ejemplo/2026-10-21.tif" }
+  ]
+}

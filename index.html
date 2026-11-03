@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Visor de Avance Dron</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@9.2.4/ol.css">
+<style>
+/* Layout: barra superior con modo y fechas; mapa al centro; línea de tiempo de vuelos abajo */
+:root{
+  --bg:#eef1ef; --panel:#ffffff; --fg:#17201d; --muted:#5c6964; --line:#d3dad6;
+  --accent:#0d6e62; --ink:#ffffff; --a:#0d6e62; --b:#b8661a; --danger:#b3261e;
+  --display:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#121816; --panel:#1a221f; --fg:#e4ebe8; --muted:#97a59f; --line:#2c3833;
+  --accent:#3fb3a2; --ink:#06201b; --a:#3fb3a2; --b:#e39a52; --danger:#f28b82; color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font:14px/1.45 var(--body);display:flex;flex-direction:column}
+header{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;
+  padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));
+  padding-top:max(10px,env(safe-area-inset-top,0px));background:var(--panel);border-bottom:1px solid var(--line)}
+h1{font:600 20px var(--display);margin:0;letter-spacing:.01em}
+.sub{color:var(--muted);font-size:13px}
+.title{display:flex;flex-direction:column;min-width:0;margin-right:auto}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:none;background:transparent;color:var(--fg);padding:7px 12px;cursor:pointer;font:500 13px var(--body)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed=true]{background:var(--fg);color:var(--bg)}
+.sel{display:flex;align-items:center;gap:6px;font-size:13px}
+.sel select{font:13px var(--mono);padding:6px 8px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--fg);max-width:46vw}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.opac{display:flex;gap:8px;align-items:center;font-size:13px}
+.btn{border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:6px;height:32px;padding:0 10px;cursor:pointer;font:500 13px var(--body)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+main{flex:1;position:relative;display:grid;grid-template-columns:1fr;min-height:0}
+main.lado{grid-template-columns:1fr 1fr;gap:2px;background:var(--line)}
+.map{position:relative;min-width:0;min-height:0;background:#1b2420}
+.tag{position:absolute;top:10px;z-index:5;font:12px var(--mono);padding:3px 8px;border-radius:4px;color:#fff;pointer-events:none}
+.ta{left:52px;background:color-mix(in srgb,var(--a) 85%,#000)}
+.tb{right:10px;background:color-mix(in srgb,var(--b) 85%,#000)}
+.split{position:absolute;top:0;bottom:0;width:2px;background:#fff;z-index:6;transform:translateX(-1px);cursor:ew-resize;touch-action:none}
+.split span{position:absolute;top:50%;left:50%;width:36px;height:36px;margin:-18px 0 0 -18px;border-radius:50%;background:#fff;color:#1b2420;display:grid;place-items:center;font:600 14px var(--mono);box-shadow:0 1px 6px rgba(0,0,0,.4)}
+.msg{position:absolute;inset:0;display:grid;place-items:center;z-index:7;color:#e4ebe8;background:rgba(18,24,22,.85);padding:24px;text-align:center}
+.msg p{max-width:52ch;margin:0}
+.ol-control button{background:var(--panel);color:var(--fg)}
+.tl{display:flex;gap:12px;align-items:center;background:var(--panel);border-top:1px solid var(--line);
+  padding:8px max(16px,env(safe-area-inset-right,0px)) max(8px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.tl-btns{display:flex;gap:6px}
+.tl-btns .btn{min-width:36px;font-family:var(--mono)}
+.tl-track{flex:1;min-width:0;overflow-x:auto;scrollbar-width:thin}
+.tl-inner{display:flex;min-width:100%;position:relative}
+.tl-range{position:absolute;top:2px;height:24px;margin:0;-webkit-appearance:none;appearance:none;background:transparent;cursor:grab;z-index:2;touch-action:none}
+.tl-range:active{cursor:grabbing}
+.tl-range::-webkit-slider-runnable-track{height:24px;background:transparent}
+.tl-range::-moz-range-track{height:24px;background:transparent}
+.tl-range::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;border-radius:50%;background:var(--accent);border:3px solid var(--panel);box-shadow:0 0 0 2px var(--accent),0 2px 6px rgba(0,0,0,.35)}
+.tl-range::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--accent);border:3px solid var(--panel);box-shadow:0 0 0 2px var(--accent),0 2px 6px rgba(0,0,0,.35)}
+.tl-range:focus-visible{outline:none}
+.tl-range:focus-visible::-webkit-slider-thumb{outline:2px solid var(--fg);outline-offset:3px}
+.tl-stop{flex:1 0 96px;position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 4px 2px;
+  background:none;border:none;color:var(--muted);cursor:pointer;font:inherit;border-radius:6px}
+.tl-stop:hover{background:color-mix(in srgb,var(--fg) 6%,transparent)}
+.tl-stop::before{content:"";position:absolute;top:13px;left:0;right:0;height:2px;background:var(--line)}
+.tl-stop:first-of-type::before{left:50%}.tl-stop:last-of-type::before{right:50%}
+.tl-stop:only-of-type::before{display:none}
+.tl-dot{width:14px;height:14px;border-radius:50%;background:var(--panel);border:2px solid var(--muted);position:relative;z-index:1;transition:transform .15s}
+.tl-date{font:500 12px var(--mono);color:var(--fg);font-variant-numeric:tabular-nums;white-space:nowrap}
+.tl-name{font-size:11px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tl-gap{font:11px var(--mono);color:var(--muted)}
+.tl-stop.cur .tl-dot{background:var(--accent);border-color:var(--accent);transform:scale(1.3)}
+.tl-stop.isA .tl-dot{background:var(--a);border-color:var(--a)}
+.tl-stop.isB .tl-dot{background:var(--b);border-color:var(--b);transform:scale(1.3)}
+.tl-stop.cur .tl-date,.tl-stop.isB .tl-date{font-weight:600}
+@media (prefers-reduced-motion:reduce){.tl-dot{transition:none}}
+@media (max-width:720px){main.lado{grid-template-columns:1fr;grid-template-rows:1fr 1fr}.tb{top:auto;bottom:24px}
+  .tl{flex-wrap:wrap;gap:6px}.tl-track{flex-basis:100%;order:-1}.tl-btns{width:100%;justify-content:center}
+  .seg button{padding:7px 9px;white-space:nowrap}main{min-height:58vh}}
+</style>
+</head>
+<body>
+<header>
+  <div class="title"><h1 id="titulo">Visor de Avance Dron</h1><span class="sub" id="resumen">Cargando vuelos…</span></div>
+  <div class="controls">
+    <label class="sel" id="boxA"><span class="dot" style="background:var(--a)"></span>A <select id="selA"></select></label>
+    <label class="sel" id="boxB"><span class="dot" style="background:var(--b)"></span>B <select id="selB"></select></label>
+    <div class="seg" role="group" aria-label="Modo de comparación">
+      <button data-mode="dia" aria-pressed="true">Un día</button>
+      <button data-mode="deslizador" aria-pressed="false">Deslizador</button>
+      <button data-mode="lado" aria-pressed="false">Lado a lado</button>
+      <button data-mode="transparencia" aria-pressed="false">Transparencia</button>
+    </div>
+    <div class="opac" id="opacBox" hidden><label for="opac">Opacidad B</label><input type="range" id="opac" min="0" max="100" value="50"></div>
+    <button class="btn" id="encuadrar">Encuadrar</button>
+    <button class="btn" id="copiar">Copiar link</button>
+  </div>
+</header>
+<main id="main">
+  <div class="map" id="mapA"><span class="tag ta" id="tagA"></span><span class="tag tb" id="tagB"></span><div class="split" id="split" tabindex="0" role="slider" aria-label="Posición del deslizador"><span>⇔</span></div></div>
+  <div class="map" id="mapB" hidden><span class="tag tb" id="tagB2"></span></div>
+  <div class="msg" id="msg" hidden><p id="msgText"></p></div>
+</main>
+<footer class="tl" aria-label="Línea de tiempo de vuelos">
+  <div class="tl-btns">
+    <button class="btn" id="prev" aria-label="Vuelo anterior">◀</button>
+    <button class="btn" id="next" aria-label="Vuelo siguiente">▶</button>
+  </div>
+  <div class="tl-track"><div class="tl-inner" id="tl"><input type="range" class="tl-range" id="tlRange" min="0" step="0.01" aria-label="Arrastra para recorrer las fechas"></div></div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/proj4@2.11.0/dist/proj4.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ol@9.2.4/dist/ol.js"></script>
+<script>
+(async () => {
+  const $ = s => document.querySelector(s);
+
+  // Zonas UTM WGS84 (EPSG:326xx norte, 327xx sur), que es como exportan casi todos los softwares de fotogrametría.
+  for (let z = 1; z <= 60; z++) {
+    proj4.defs('EPSG:' + (32600 + z), `+proj=utm +zone=${z} +datum=WGS84 +units=m +no_defs`);
+    proj4.defs('EPSG:' + (32700 + z), `+proj=utm +zone=${z} +south +datum=WGS84 +units=m +no_defs`);
+  }
+  // SIRGAS-Chile / SIRGAS 2000 UTM sur (zonas 17 a 25)
+  for (let z = 17; z <= 25; z++) proj4.defs('EPSG:' + (31960 + z), `+proj=utm +zone=${z} +south +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs`);
+  ol.proj.proj4.register(proj4);
+
+  const fmt = d => { try { return new Date(d + 'T12:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' }); } catch (e) { return d; } };
+  const showMsg = t => { $('#msgText').textContent = t; $('#msg').hidden = !t; };
+
+  let cfg;
+  try {
+    const r = await fetch('vuelos.json', { cache: 'no-store' });
+    cfg = await r.json();
+  } catch (e) { showMsg('No se pudo leer vuelos.json. Revisa que el archivo exista y sea JSON válido.'); return; }
+
+  const vuelos = (cfg.vuelos || []).slice().sort((x, y) => x.fecha.localeCompare(y.fecha));
+  if (cfg.titulo) { $('#titulo').textContent = cfg.titulo; document.title = cfg.titulo; }
+  if (!vuelos.length) { showMsg('Aún no hay vuelos en vuelos.json. Agrega el primero siguiendo el README.'); $('#resumen').textContent = 'Sin vuelos'; return; }
+  $('#resumen').textContent = `${vuelos.length} vuelo${vuelos.length > 1 ? 's' : ''} · ${fmt(vuelos[0].fecha)} – ${fmt(vuelos.at(-1).fecha)}`;
+
+  // Estado inicial: penúltimo vs último vuelo, o lo que venga en el link (#a=...&b=...&modo=...)
+  const h = new URLSearchParams(location.hash.slice(1));
+  const idx = k => { const v = h.get(k); const i = vuelos.findIndex(x => x.fecha === v); return i; };
+  const st = {
+    a: idx('a') >= 0 ? idx('a') : Math.max(0, vuelos.length - 2),
+    b: idx('b') >= 0 ? idx('b') : vuelos.length - 1,
+    modo: ['dia', 'deslizador', 'lado', 'transparencia'].includes(h.get('modo')) ? h.get('modo') : 'dia',
+    split: .5, opac: .5, t: 0,
+  };
+
+  // Fuentes GeoTIFF (una por vuelo, se crean al usarse)
+  const fuentes = new Map();
+  const fuente = i => {
+    if (!fuentes.has(i)) fuentes.set(i, new ol.source.GeoTIFF({ sources: [{ url: vuelos[i].url }], convertToRGB: 'auto', transition: 0 }));
+    return fuentes.get(i);
+  };
+
+  const base = () => new ol.layer.Tile({ source: new ol.source.OSM() });
+  const view = new ol.View({ center: ol.proj.fromLonLat([-70.65, -33.45]), zoom: 5, maxZoom: 24 });
+  const capaA = new ol.layer.WebGLTile({ className: 'capa-a' });
+  const capaB = new ol.layer.WebGLTile({ className: 'capa-b' });
+  const capaB2 = new ol.layer.WebGLTile({ className: 'capa-b2' });
+  const mapA = new ol.Map({ target: 'mapA', layers: [base(), capaA, capaB], view });
+  const mapB = new ol.Map({ target: 'mapB', layers: [base(), capaB2], view });
+
+  // Recorte del deslizador: B solo se dibuja a la derecha de la línea
+  capaB.on('prerender', e => {
+    if (st.modo !== 'deslizador') return;
+    const gl = e.context, size = mapA.getSize();
+    const bl = ol.render.getRenderPixel(e, [size[0] * st.split, size[1]]);
+    const tr = ol.render.getRenderPixel(e, [size[0], 0]);
+    gl.enable(gl.SCISSOR_TEST);
+    gl.scissor(Math.round(bl[0]), Math.round(bl[1]), Math.max(0, Math.round(tr[0] - bl[0])), Math.max(0, Math.round(tr[1] - bl[1])));
+  });
+  capaB.on('postrender', e => e.context.disable(e.context.SCISSOR_TEST));
+
+  const errores = src => src.on('change', () => {
+    if (src.getState() === 'error') showMsg('No se pudo abrir un GeoTIFF. Revisa que el link sea público y que el almacenamiento permita CORS (ver README).');
+  });
+
+  let encuadrado = false;
+  async function encuadrar() {
+    try {
+      const v = await fuente(st.b).getView();
+      const ext = ol.proj.transformExtent(v.extent, v.projection, 'EPSG:3857');
+      view.fit(ext, { size: (st.modo === 'lado' ? mapB : mapA).getSize(), padding: [20, 20, 20, 20], duration: encuadrado ? 300 : 0 });
+      encuadrado = true;
+    } catch (e) {
+      showMsg('No se pudo leer la ubicación del GeoTIFF. Debe estar georreferenciado (UTM WGS84, SIRGAS UTM o Web Mercator).');
+    }
+  }
+
+  function aplicar(arrastrando) {
+    const sA = fuente(st.a), sB = fuente(st.b);
+    [sA, sB].forEach(errores);
+    const dia = st.modo === 'dia';
+    const fijar = (capa, src) => { if (capa.getSource() !== src) capa.setSource(src); };
+    if (dia) {
+      // Entre dos vuelos se funden: f = 0 muestra el anterior, f = 1 el siguiente
+      const i0 = Math.floor(st.t), i1 = Math.min(vuelos.length - 1, i0 + 1), f = st.t - i0;
+      fijar(capaA, fuente(i0));
+      fijar(capaB, f > 0.001 ? fuente(i1) : null);
+      capaB.setOpacity(f);
+      if (f > 0.001) errores(fuente(i1));
+    } else {
+      fijar(capaA, sA);
+      fijar(capaB, st.modo === 'lado' ? null : sB);
+      capaB.setOpacity(st.modo === 'transparencia' ? st.opac : 1);
+    }
+    fijar(capaB2, st.modo === 'lado' ? sB : null);
+
+    $('#main').className = st.modo === 'lado' ? 'lado' : '';
+    $('#mapB').hidden = st.modo !== 'lado';
+    $('#split').hidden = st.modo !== 'deslizador';
+    $('#split').style.left = (st.split * 100) + '%';
+    $('#split').setAttribute('aria-valuenow', Math.round(st.split * 100));
+    $('#opacBox').hidden = st.modo !== 'transparencia';
+    document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === st.modo));
+
+    const ta = 'A · ' + fmt(vuelos[st.a].fecha), tb = 'B · ' + fmt(vuelos[st.b].fecha);
+    const entre = dia && st.t % 1 > 0.001;
+    $('#tagA').textContent = entre ? `${fmt(vuelos[Math.floor(st.t)].fecha)} → ${fmt(vuelos[Math.ceil(st.t)].fecha)}`
+      : dia ? fmt(vuelos[st.b].fecha) + (vuelos[st.b].nombre ? ' · ' + vuelos[st.b].nombre : '') : ta;
+    $('#tagB').textContent = tb; $('#tagB').hidden = st.modo === 'lado' || dia;
+    $('#boxA').hidden = $('#boxB').hidden = dia;
+    $('#selA').value = st.a; $('#selB').value = st.b;
+    linea(arrastrando);
+    $('#tagB2').textContent = tb;
+
+    history.replaceState(null, '', `#a=${vuelos[st.a].fecha}&b=${vuelos[st.b].fecha}&modo=${st.modo}`);
+    if (!arrastrando) { mapA.updateSize(); mapB.updateSize(); }
+    mapA.render();
+  }
+
+  // Línea de tiempo: un punto por vuelo, con los días transcurridos desde el vuelo anterior
+  const dias = (d1, d2) => Math.round((new Date(d2 + 'T12:00:00') - new Date(d1 + 'T12:00:00')) / 864e5);
+  const tl = $('#tl');
+  vuelos.forEach((v, i) => {
+    const b = document.createElement('button');
+    b.className = 'tl-stop'; b.dataset.i = i;
+    const gap = i ? `+${dias(vuelos[i - 1].fecha, v.fecha)} días` : 'inicio';
+    b.innerHTML = `<span class="tl-dot"></span><span class="tl-date"></span><span class="tl-name"></span><span class="tl-gap"></span>`;
+    b.querySelector('.tl-date').textContent = fmt(v.fecha);
+    b.querySelector('.tl-name').textContent = v.nombre || '';
+    b.querySelector('.tl-gap').textContent = gap;
+    b.title = `Día ${dias(vuelos[0].fecha, v.fecha)} desde el primer vuelo`;
+    b.onclick = () => ir(i);
+    tl.appendChild(b);
+  });
+  const rango = $('#tlRange');
+  const n = vuelos.length;
+  rango.max = Math.max(0, n - 1);
+  const ajustarRango = () => {
+    // El riel va del centro del primer punto al centro del último; la perilla mide 24 px
+    const w = tl.scrollWidth, paso = w / n;
+    rango.style.left = (paso / 2 - 12) + 'px';
+    rango.style.width = (w - paso + 24) + 'px';
+  };
+  new ResizeObserver(ajustarRango).observe(tl);
+  rango.hidden = n < 2;
+  rango.addEventListener('input', () => {
+    const v = +rango.value;
+    if (st.modo === 'dia') { st.t = v; st.b = Math.round(v); }
+    else { st.b = Math.round(v); st.t = st.b; if (st.a >= st.b) st.a = Math.max(0, st.b - 1); }
+    aplicar(true);
+  });
+  // Al soltar, si quedó muy cerca de un vuelo, se ajusta a él
+  rango.addEventListener('change', () => {
+    const v = +rango.value, r = Math.round(v);
+    if (st.modo !== 'dia' || Math.abs(v - r) < 0.12) ir(r);
+  });
+  function linea(arrastrando) {
+    const dia = st.modo === 'dia';
+    if (!arrastrando) rango.value = dia ? st.t : st.b;
+    rango.step = dia ? 0.01 : 1;
+    tl.querySelectorAll('.tl-stop').forEach(b => {
+      const i = +b.dataset.i;
+      b.classList.toggle('cur', dia && i === st.b);
+      b.classList.toggle('isA', !dia && i === st.a);
+      b.classList.toggle('isB', !dia && i === st.b);
+      b.setAttribute('aria-current', i === st.b ? 'true' : 'false');
+    });
+    const cur = tl.querySelector(`[data-i="${st.b}"]`);
+    if (cur && !arrastrando) cur.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    $('#prev').disabled = st.b <= 0; $('#next').disabled = st.b >= vuelos.length - 1;
+  }
+  // Ir a un vuelo: en "Un día" lo muestra; al comparar lo deja como B y A pasa a ser el vuelo anterior
+  function ir(i) {
+    i = Math.max(0, Math.min(vuelos.length - 1, i));
+    st.b = i; st.t = i;
+    if (st.modo !== 'dia' && st.a >= st.b) st.a = Math.max(0, st.b - 1);
+    showMsg(''); aplicar();
+  }
+  $('#prev').onclick = () => ir(st.t % 1 ? Math.floor(st.t) : st.b - 1);
+  $('#next').onclick = () => ir(st.t % 1 ? Math.ceil(st.t) : st.b + 1);
+  document.addEventListener('keydown', e => {
+    if (e.target.closest('select,input,.split')) return;
+    if (e.key === 'ArrowLeft') ir(st.b - 1);
+    if (e.key === 'ArrowRight') ir(st.b + 1);
+  });
+
+  for (const [k, sel] of [['a', $('#selA')], ['b', $('#selB')]]) {
+    vuelos.forEach((v, i) => {
+      const o = new Option(fmt(v.fecha) + (v.nombre ? ' · ' + v.nombre : ''), i);
+      if (i === st[k]) o.selected = true;
+      sel.add(o);
+    });
+    sel.onchange = () => { st[k] = +sel.value; showMsg(''); aplicar(); };
+  }
+  document.querySelectorAll('.seg button').forEach(b => b.onclick = () => { st.modo = b.dataset.mode; if (st.modo !== 'dia' && st.a >= st.b) st.a = Math.max(0, st.b - 1); aplicar(); });
+  $('#opac').oninput = e => { st.opac = e.target.value / 100; capaB.setOpacity(st.opac); };
+  $('#encuadrar').onclick = encuadrar;
+  $('#copiar').onclick = async () => {
+    try { await navigator.clipboard.writeText(location.href); $('#copiar').textContent = 'Link copiado'; }
+    catch (e) { $('#copiar').textContent = 'Copia la URL del navegador'; }
+    setTimeout(() => $('#copiar').textContent = 'Copiar link', 2000);
+  };
+
+  // Arrastre de la línea del deslizador
+  const split = $('#split');
+  let arrastrando = false;
+  split.addEventListener('pointerdown', e => { arrastrando = true; split.setPointerCapture(e.pointerId); e.stopPropagation(); });
+  split.addEventListener('pointermove', e => {
+    if (!arrastrando) return;
+    const r = $('#mapA').getBoundingClientRect();
+    st.split = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    split.style.left = (st.split * 100) + '%'; mapA.render();
+  });
+  split.addEventListener('pointerup', () => arrastrando = false);
+  split.addEventListener('keydown', e => {
+    const d = e.key === 'ArrowLeft' ? -.02 : e.key === 'ArrowRight' ? .02 : 0;
+    if (!d) return;
+    st.split = Math.min(1, Math.max(0, st.split + d)); split.style.left = (st.split * 100) + '%'; mapA.render();
+  });
+
+  st.t = st.b;
+  aplicar();
+  encuadrar();
+})();
+</script>
+</body>
+</html>
