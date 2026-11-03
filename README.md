@@ -12,21 +12,25 @@ La carpeta `ejemplo/` trae 3 ortomosaicos simulados para ver el visor funcionand
 
 ## Agregar un vuelo nuevo
 
-### 1. Exportar el ortomosaico como GeoTIFF optimizado (COG)
+### 1. Convertir el ortomosaico a GeoTIFF optimizado (COG)
 
-Los navegadores no leen ECW. Convierte cada ortomosaico en QGIS:
+Los TIFF que exporta el software de fotogrametría suelen venir sin comprimir y pesan varios GB.
+Convertidos a COG con compresión JPEG quedan entre 10 y 30 veces más livianos, sin diferencia visible en pantalla.
+Los navegadores tampoco leen ECW, así que los ECW también pasan por este paso.
 
-1. Abre el `.ecw` o `.tif` en QGIS.
-2. Clic derecho en la capa → **Exportar → Guardar como…**
-3. Formato: **GeoTIFF**. SRC: el del proyecto (UTM WGS84 o SIRGAS UTM sirven tal cual).
-4. En **Opciones de creación**, elige el perfil o escribe: `COMPRESS=JPEG`, `QUALITY=85`, y marca **Crear como COG**
-   (o en formato elige directamente **Cloud Optimized GeoTIFF** si aparece).
-5. Si el ortomosaico no trae transparencia, define **NoData = 0** (o agrega banda alfa) para que el borde no se vea negro.
-6. Nombra el archivo con la fecha del vuelo, por ejemplo `2026-10-21.tif`.
+**Forma fácil (Windows, con QGIS instalado):**
+1. Copia `convertir.bat` a la carpeta donde están tus `.tif` o `.ecw`.
+2. Abre **OSGeo4W Shell** (menú inicio, viene con QGIS) y entra a esa carpeta con `cd "C:\ruta\a\la\carpeta"`.
+3. Escribe `convertir.bat`. Los archivos listos quedan en la subcarpeta `web`.
+4. Nombra cada archivo con la fecha del vuelo, por ejemplo `2026-10-21.tif`.
 
-Con GDAL por consola: `gdal_translate entrada.ecw 2026-10-21.tif -of COG -co COMPRESS=JPEG -co QUALITY=85 -a_nodata 0`
+Para archivos aún más livianos, edita `convertir.bat` y pon `set RES=0.05` (5 cm/px). Para ver el avance de una obra suele bastar.
 
-**Ojo:** `index.html` solo funciona publicado en un sitio web (GitHub Pages u otro). Si lo abres directo desde el computador o desde la vista previa de la app, se queda en "Cargando vuelos…".
+**Comando suelto:**
+`gdal_translate entrada.tif salida.tif -b 1 -b 2 -b 3 -mask 4 -of COG -co COMPRESS=JPEG -co QUALITY=85`
+(la banda 4 es la transparencia; si tu archivo solo tiene 3 bandas, quita `-mask 4`).
+
+**Cuánto cabe:** el plan gratis de R2 trae 10 GB. Un ortomosaico de 3 GB sin comprimir queda en 150 a 300 MB, o sea unos 30 a 60 vuelos. Pasado eso, R2 cobra US$ 0,015 por GB al mes (100 GB ≈ US$ 1,5 al mes).
 
 ### 2. Subirlo a Cloudflare R2
 
@@ -52,3 +56,7 @@ Envía el link del sitio. El botón **Copiar link** incluye las fechas y el modo
 
 UTM WGS84 (EPSG:326xx y 327xx), SIRGAS 2000 UTM sur (EPSG:31977 a 31985) y Web Mercator (EPSG:3857).
 Si tu ortomosaico usa otro, reprojéctalo a uno de estos al exportar.
+
+## Nota
+
+`index.html` solo funciona publicado en un sitio web (GitHub Pages). Si lo abres directo desde el computador se queda en "Cargando vuelos…".
