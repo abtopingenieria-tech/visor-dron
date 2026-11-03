@@ -18,6 +18,13 @@ if [ "$bandas" -lt 3 ]; then
   exit 1
 fi
 
+# Si ya viene convertido (COG con JPEG, por ejemplo desde convertir.bat) y sin cambio de resolución, se usa tal cual
+estructura=$(python3 -c 'import json,sys; m=json.load(sys.stdin).get("metadata",{}).get("IMAGE_STRUCTURE",{}); print(m.get("LAYOUT",""), m.get("COMPRESSION",""))' <<<"$info")
+if [ -z "$res" ] && [[ "$estructura" == COG*JPEG* ]]; then
+  echo "El archivo ya está optimizado ($estructura); se sube sin reconvertir."
+  cp "$entrada" "$salida"; ls -lh "$salida"; exit 0
+fi
+
 args=(-b 1 -b 2 -b 3)
 # La cuarta banda es la transparencia: pasa a ser la máscara del COG
 if [ "$bandas" -ge 4 ]; then args+=(-mask 4); fi

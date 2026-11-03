@@ -25,7 +25,7 @@ Qué hace: descarga el archivo, lo convierte a COG con compresión JPEG (10 a 30
 lo sube a Cloudflare R2 y lo agrega a `vuelos.json`. Si repites una fecha, reemplaza ese vuelo.
 
 **ECW:** no se puede convertir en la nube (es un formato con licencia). Exporta el ortomosaico como GeoTIFF desde tu
-software de fotogrametría, o usa `convertir.bat` (abajo).
+software de fotogrametría, o conviértelo con `convertir.bat` (abajo).
 
 ## Configuración única: claves de Cloudflare R2
 
@@ -50,12 +50,15 @@ Configuración del bucket (ya hecha): acceso público por `r2.dev` y política C
 El plan gratis de R2 trae 10 GB. Un ortomosaico de 3 GB sin comprimir queda en unos 150 a 300 MB, o sea 30 a 60 vuelos.
 Pasado eso, R2 cobra US$ 0,015 por GB al mes (100 GB ≈ US$ 1,5 al mes).
 
-## Alternativa local: `convertir.bat`
+## Si tus ortomosaicos están en ECW: `convertir.bat`
 
-Si prefieres convertir en tu computador (por ejemplo para archivos ECW), con QGIS instalado:
-copia `convertir.bat` a la carpeta de tus ortomosaicos, abre **OSGeo4W Shell**, entra a esa carpeta
-(`cd /d "D:\Vuelos\Obra"`) y escribe `convertir.bat`. Los archivos quedan en `web\`; súbelos al bucket
-y agrégalos a `vuelos.json` a mano.
+El ECW no se puede abrir en la nube, así que se convierte en tu computador (Windows):
+
+1. Instala QGIS una vez desde https://qgis.org/download/ (no hace falta abrirlo nunca; trae el lector de ECW).
+2. Descarga [`convertir.bat`](convertir.bat) (botón ↓ "Download raw file") y cópialo a la carpeta donde están los `.ecw`.
+3. Hazle **doble clic**. Convierte todos los `.ecw` y `.tif` de esa carpeta y deja los livianos en la subcarpeta `web`.
+4. Sube los archivos de `web` a Google Drive y usa la acción **Agregar vuelo** como siempre (detecta que ya vienen
+   optimizados y no los vuelve a comprimir).
 
 ## Sistemas de coordenadas
 
