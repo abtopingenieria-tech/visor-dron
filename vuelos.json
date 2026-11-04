@@ -1,8 +1,30 @@
 {
-  "titulo": "Visor de Avance Dron",
+  "titulo": "Ortofoto CFRD Escondida",
   "vuelos": [
-    { "fecha": "2026-08-12", "nombre": "Ejemplo · Movimiento de tierra", "url": "ejemplo/2026-08-12.tif" },
-    { "fecha": "2026-09-16", "nombre": "Ejemplo · Fundaciones", "url": "ejemplo/2026-09-16.tif" },
-    { "fecha": "2026-10-21", "nombre": "Ejemplo · Techumbre", "url": "ejemplo/2026-10-21.tif" }
+    {
+      "fecha": "2026-06-17",
+      "nombre": "",
+      "url": "https://pub-85f1f1b1acc34a97a5cd365a422a5baa.r2.dev/2026-06-17.tif"
+    },
+    {
+      "fecha": "2026-10-17",
+      "nombre": "",
+      "url": "https://pub-85f1f1b1acc34a97a5cd365a422a5baa.r2.dev/2026-10-17.tif"
+    },
+    {
+      "fecha": "2026-10-22",
+      "nombre": "",
+      "url": "https://pub-85f1f1b1acc34a97a5cd365a422a5baa.r2.dev/2026-10-22.tif"
+    },
+    {
+      "fecha": "2026-10-24",
+      "nombre": "",
+      "url": "https://pub-85f1f1b1acc34a97a5cd365a422a5baa.r2.dev/2026-10-24.tif"
+    },
+    {
+      "fecha": "2026-10-27",
+      "nombre": "",
+      "url": "https://pub-85f1f1b1acc34a97a5cd365a422a5baa.r2.dev/2026-10-27.tif"
+    }
   ]
 }
