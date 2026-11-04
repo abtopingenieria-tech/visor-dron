@@ -9,6 +9,7 @@ R2_BUCKET, R2_PUBLIC_URL, R2_ACCOUNT_ID (+ credenciales AWS_* para la CLI de aws
 - Link a un archivo: usa FECHA/NOMBRE si vienen; si no, los saca del nombre del archivo.
 """
 import os, re, subprocess, sys, urllib.parse
+from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -16,7 +17,15 @@ import actualizar_vuelos  # noqa: E402
 
 TRABAJO = Path("trabajo")
 EXT = (".tif", ".tiff")
-RE_FECHA = re.compile(r"(20\d{2})[-_. ]?(0[1-9]|1[0-2])[-_. ]?(0[1-9]|[12]\d|3[01])")
+# Formatos de fecha aceptados en el nombre del archivo, en orden de prioridad:
+#   2026-10-21 / 20261021 (año-mes-día)  ·  21-10-2026 / 21-10-26 (formato chileno día-mes-año)
+SEP = r"[-_. /]"
+RE_FECHAS = [
+    (re.compile(rf"(?<!\d)(20\d{{2}}){SEP}?(\d{{2}}){SEP}?(\d{{2}})(?!\d)"), ("a", "m", "d")),
+    (re.compile(rf"(?<!\d)(\d{{1,2}}){SEP}(\d{{1,2}}){SEP}(20\d{{2}})(?!\d)"), ("d", "m", "a")),
+    (re.compile(rf"(?<!\d)(\d{{1,2}}){SEP}(\d{{1,2}}){SEP}(\d{{2}})(?!\d)"), ("d", "m", "a2")),
+]
+CONECTORES = {"al", "del", "de", "el", "la", "vuelo", "fecha"}
 
 env = os.environ.get
 LINK, FECHA, NOMBRE, RES = env("LINK", "").strip(), env("FECHA", "").strip(), env("NOMBRE", "").strip(), env("RES", "").strip()
@@ -29,14 +38,23 @@ def anotar(linea):
 
 
 def desde_nombre(nombre_archivo):
-    """'2026-10-21 Losa piso 1.tif' -> ('2026-10-21', 'Losa piso 1')"""
+    """'2026-10-21 Losa piso 1.tif' -> ('2026-10-21', 'Losa piso 1')
+    'Ortofoto CFRD del 17-06-26.tif' -> ('2026-06-17', 'Ortofoto CFRD')"""
     base = Path(nombre_archivo).stem
-    m = RE_FECHA.search(base)
-    if not m:
-        return None, base
-    fecha = f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
-    partes = [x.replace("_", " ").strip(" -.") for x in (base[:m.start()], base[m.end():])]
-    return fecha, re.sub(r"\s+", " ", " ".join(x for x in partes if x)).strip()
+    for patron, orden in RE_FECHAS:
+        for m in patron.finditer(base):
+            partes = dict(zip(orden, m.groups()))
+            anio = int(partes["a"]) if "a" in partes else 2000 + int(partes["a2"])
+            try:
+                fecha = date(anio, int(partes["m"]), int(partes["d"])).isoformat()
+            except ValueError:
+                continue
+            resto = [x.replace("_", " ").strip(" -.") for x in (base[:m.start()], base[m.end():])]
+            palabras = " ".join(x for x in resto if x).split()
+            while palabras and palabras[-1].lower() in CONECTORES:  # "... Escondida al" -> "... Escondida"
+                palabras.pop()
+            return fecha, " ".join(palabras)
+    return None, base
 
 
 def descargar_directo(url, destino):
@@ -74,14 +92,23 @@ def main():
         archivos = gdown.download_folder(url=LINK, skip_download=True, quiet=True) or []
         anotar(f"Carpeta de Drive con {len(archivos)} archivo(s).")
         ya = actualizar_vuelos.fechas_reales()
-        for a in sorted(archivos, key=lambda a: a.path):
+        # Si todos los archivos se llaman igual salvo la fecha ("Ortofoto Obra X del 17-06-26"),
+        # ese texto pasa a ser el título del visor y cada vuelo muestra solo su fecha
+        nombres = {desde_nombre(Path(a.path).name)[1] for a in archivos
+                   if Path(a.path).name.lower().endswith(EXT) and desde_nombre(Path(a.path).name)[0]}
+        comun = nombres.pop() if len(nombres) == 1 and len(archivos) > 1 else None
+        if comun:
+            actualizar_vuelos.poner_titulo_si_falta(comun)
+        for a in sorted(archivos, key=lambda a: desde_nombre(Path(a.path).name)[0] or a.path):
             nombre_archivo = Path(a.path).name
             if not nombre_archivo.lower().endswith(EXT):
                 anotar(f"- ⏭️ {nombre_archivo}: no es .tif (los .ecw se convierten antes con convertir.bat)")
                 continue
             fecha, nombre = desde_nombre(nombre_archivo)
+            if comun and nombre == comun:
+                nombre = ""
             if not fecha:
-                anotar(f"- ⚠️ {nombre_archivo}: el nombre no tiene fecha (renómbralo como 2026-10-21 Nombre.tif)")
+                anotar(f"- ⚠️ {nombre_archivo}: no encontré una fecha válida en el nombre (usa 21-10-26, 21-10-2026 o 2026-10-21)")
                 errores += 1
                 continue
             if fecha in ya:
@@ -112,7 +139,7 @@ def main():
         f_archivo, n_archivo = desde_nombre(destino.name)
         fecha, nombre = FECHA or f_archivo, NOMBRE or n_archivo
         if not fecha:
-            sys.exit("::error::Falta la fecha: escríbela en el formulario o ponla en el nombre del archivo (2026-10-21 Nombre.tif).")
+            sys.exit("::error::Falta la fecha: escríbela en el formulario o ponla en el nombre del archivo (por ejemplo 21-10-26).")
         publicar(destino, fecha, nombre)
 
     with open(os.environ.get("GITHUB_STEP_SUMMARY", os.devnull), "a", encoding="utf-8") as f:

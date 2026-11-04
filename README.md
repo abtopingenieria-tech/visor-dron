@@ -11,8 +11,8 @@ Cualquier persona con el link puede verlo: https://abtopingenieria-tech.github.i
 
 ## Agregar vuelos (sin instalar nada)
 
-**Nombra cada archivo con su fecha y un nombre corto**, por ejemplo `2026-10-21 Losa piso 1.tif`.
-El visor toma de ahí la fecha y el nombre que muestra en la línea de tiempo.
+**El nombre de cada archivo debe incluir su fecha**: sirve `Ortofoto Obra del 21-10-26.tif` (día-mes-año), `21-10-2026` o `2026-10-21`.
+El resto del nombre se muestra en la línea de tiempo. Si todos los archivos se llaman igual salvo la fecha, ese texto pasa a ser el título del visor.
 
 1. Sube los `.tif` a una carpeta de Google Drive y comparte **la carpeta** (o un solo archivo) como
    **"Cualquier persona con el enlace"**. Copia el link.
