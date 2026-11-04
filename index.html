@@ -48,6 +48,9 @@ main.lado{grid-template-columns:1fr 1fr;gap:2px;background:var(--line)}
 .tb{right:10px;background:color-mix(in srgb,var(--b) 85%,#000)}
 .split{position:absolute;top:0;bottom:0;width:2px;background:#fff;z-index:6;transform:translateX(-1px);cursor:ew-resize;touch-action:none}
 .split span{position:absolute;top:50%;left:50%;width:36px;height:36px;margin:-18px 0 0 -18px;border-radius:50%;background:#fff;color:#1b2420;display:grid;place-items:center;font:600 14px var(--mono);box-shadow:0 1px 6px rgba(0,0,0,.4)}
+.cargando{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);z-index:6;font:12px var(--mono);padding:4px 10px;border-radius:999px;background:rgba(18,24,22,.8);color:#e4ebe8;pointer-events:none}
+.cargando::before{content:"";display:inline-block;width:8px;height:8px;margin-right:6px;border-radius:50%;background:var(--accent);animation:pulso 1s ease-in-out infinite}
+@keyframes pulso{50%{opacity:.25}}
 .msg{position:absolute;inset:0;display:grid;place-items:center;z-index:7;color:#e4ebe8;background:rgba(18,24,22,.85);padding:24px;text-align:center}
 .msg p{max-width:52ch;margin:0}
 .ol-control button{background:var(--panel);color:var(--fg)}
@@ -79,7 +82,7 @@ main.lado{grid-template-columns:1fr 1fr;gap:2px;background:var(--line)}
 .tl-stop.isA .tl-dot{background:var(--a);border-color:var(--a)}
 .tl-stop.isB .tl-dot{background:var(--b);border-color:var(--b);transform:scale(1.3)}
 .tl-stop.cur .tl-date,.tl-stop.isB .tl-date{font-weight:600}
-@media (prefers-reduced-motion:reduce){.tl-dot{transition:none}}
+@media (prefers-reduced-motion:reduce){.tl-dot{transition:none}.cargando::before{animation:none}}
 @media (max-width:720px){main.lado{grid-template-columns:1fr;grid-template-rows:1fr 1fr}.tb{top:auto;bottom:24px}
   .tl{flex-wrap:wrap;gap:6px}.tl-track{flex-basis:100%;order:-1}.tl-btns{width:100%;justify-content:center}
   .seg button{padding:7px 9px;white-space:nowrap}main{min-height:58vh}}
@@ -105,6 +108,7 @@ main.lado{grid-template-columns:1fr 1fr;gap:2px;background:var(--line)}
 <main id="main">
   <div class="map" id="mapA"><span class="tag ta" id="tagA"></span><span class="tag tb" id="tagB"></span><div class="split" id="split" tabindex="0" role="slider" aria-label="Posición del deslizador"><span>⇔</span></div></div>
   <div class="map" id="mapB" hidden><span class="tag tb" id="tagB2"></span></div>
+  <span class="cargando" id="cargando" hidden role="status">Cargando imagen…</span>
   <div class="msg" id="msg" hidden><p id="msgText"></p></div>
 </main>
 <footer class="tl" aria-label="Línea de tiempo de vuelos">
@@ -155,35 +159,72 @@ main.lado{grid-template-columns:1fr 1fr;gap:2px;background:var(--line)}
     split: .5, opac: .5, t: 0,
   };
 
-  // Fuentes GeoTIFF (una por vuelo, se crean al usarse)
-  const fuentes = new Map();
+  // Fuentes GeoTIFF: una por vuelo. Se cuentan los mosaicos pendientes para mostrar "Cargando…"
+  const fuentes = new Map(), pendientes = new Map();
   const fuente = i => {
-    if (!fuentes.has(i)) fuentes.set(i, new ol.source.GeoTIFF({ sources: [{ url: vuelos[i].url }], convertToRGB: 'auto', transition: 0 }));
+    if (!fuentes.has(i)) {
+      const src = new ol.source.GeoTIFF({ sources: [{ url: vuelos[i].url }], convertToRGB: 'auto', transition: 0 });
+      pendientes.set(i, 0);
+      src.on('tileloadstart', () => { pendientes.set(i, pendientes.get(i) + 1); estadoCarga(); });
+      const fin = () => { pendientes.set(i, Math.max(0, pendientes.get(i) - 1)); estadoCarga(); };
+      src.on('tileloadend', fin); src.on('tileloaderror', fin);
+      src.on('change', () => {
+        if (src.getState() === 'error') showMsg('No se pudo abrir un GeoTIFF. Revisa que el link sea público y que el almacenamiento permita CORS (ver README).');
+      });
+      fuentes.set(i, src);
+    }
     return fuentes.get(i);
   };
 
   const base = () => new ol.layer.Tile({ source: new ol.source.OSM() });
   const view = new ol.View({ center: ol.proj.fromLonLat([-70.65, -33.45]), zoom: 5, maxZoom: 24 });
-  const capaA = new ol.layer.WebGLTile({ className: 'capa-a' });
-  const capaB = new ol.layer.WebGLTile({ className: 'capa-b' });
-  const capaB2 = new ol.layer.WebGLTile({ className: 'capa-b2' });
-  const mapA = new ol.Map({ target: 'mapA', layers: [base(), capaA, capaB], view });
+
+  // Una capa por vuelo, todas en el mismo mapa. Cambiar de fecha solo cambia opacidades, así que es
+  // inmediato; las fechas vecinas se mantienen cargadas con opacidad 0 para que estén listas.
+  let capaRecorte = null;
+  const capas = vuelos.map((v, i) => {
+    const capa = new ol.layer.WebGLTile({ source: fuente(i), visible: false, preload: 2 });
+    // Deslizador: la capa B solo se dibuja a la derecha de la línea
+    capa.on('prerender', e => {
+      if (capa !== capaRecorte) return;
+      const gl = e.context, size = mapA.getSize();
+      const bl = ol.render.getRenderPixel(e, [size[0] * st.split, size[1]]);
+      const tr = ol.render.getRenderPixel(e, [size[0], 0]);
+      gl.enable(gl.SCISSOR_TEST);
+      gl.scissor(Math.round(bl[0]), Math.round(bl[1]), Math.max(0, Math.round(tr[0] - bl[0])), Math.max(0, Math.round(tr[1] - bl[1])));
+    });
+    capa.on('postrender', e => e.context.disable(e.context.SCISSOR_TEST));
+    return capa;
+  });
+  const capaB2 = new ol.layer.WebGLTile({ preload: 2 });
+  const mapA = new ol.Map({ target: 'mapA', layers: [base(), ...capas], view });
   const mapB = new ol.Map({ target: 'mapB', layers: [base(), capaB2], view });
 
-  // Recorte del deslizador: B solo se dibuja a la derecha de la línea
-  capaB.on('prerender', e => {
-    if (st.modo !== 'deslizador') return;
-    const gl = e.context, size = mapA.getSize();
-    const bl = ol.render.getRenderPixel(e, [size[0] * st.split, size[1]]);
-    const tr = ol.render.getRenderPixel(e, [size[0], 0]);
-    gl.enable(gl.SCISSOR_TEST);
-    gl.scissor(Math.round(bl[0]), Math.round(bl[1]), Math.max(0, Math.round(tr[0] - bl[0])), Math.max(0, Math.round(tr[1] - bl[1])));
-  });
-  capaB.on('postrender', e => e.context.disable(e.context.SCISSOR_TEST));
+  let visibles = [];
+  function estadoCarga() {
+    const cargando = visibles.some(i => pendientes.get(i) > 0);
+    $('#cargando').hidden = !cargando;
+  }
 
-  const errores = src => src.on('change', () => {
-    if (src.getState() === 'error') showMsg('No se pudo abrir un GeoTIFF. Revisa que el link sea público y que el almacenamiento permita CORS (ver README).');
-  });
+  // roles: [[índice, opacidad], ...] de abajo hacia arriba. Precarga: vecinos con opacidad 0.
+  function mostrar(roles, recorte) {
+    const n = vuelos.length, activos = new Map(roles.map(([i, op], z) => [i, [op, z + 1]]));
+    const ancla = roles.length ? roles[roles.length - 1][0] : 0;
+    const precarga = new Set();
+    if (n <= 6) for (let i = 0; i < n; i++) precarga.add(i);
+    else for (let d = -2; d <= 2; d++) if (ancla + d >= 0 && ancla + d < n) precarga.add(ancla + d);
+    capas.forEach((capa, i) => {
+      if (activos.has(i)) {
+        const [op, z] = activos.get(i);
+        capa.setVisible(true); capa.setOpacity(op); capa.setZIndex(z);
+      } else if (precarga.has(i)) {
+        capa.setVisible(true); capa.setOpacity(0); capa.setZIndex(0);
+      } else capa.setVisible(false);
+    });
+    capaRecorte = recorte != null ? capas[recorte] : null;
+    visibles = roles.filter(([, op]) => op > 0).map(([i]) => i);
+    estadoCarga();
+  }
 
   let encuadrado = false;
   async function encuadrar() {
@@ -198,23 +239,20 @@ main.lado{grid-template-columns:1fr 1fr;gap:2px;background:var(--line)}
   }
 
   function aplicar(arrastrando) {
-    const sA = fuente(st.a), sB = fuente(st.b);
-    [sA, sB].forEach(errores);
     const dia = st.modo === 'dia';
-    const fijar = (capa, src) => { if (capa.getSource() !== src) capa.setSource(src); };
     if (dia) {
       // Entre dos vuelos se funden: f = 0 muestra el anterior, f = 1 el siguiente
       const i0 = Math.floor(st.t), i1 = Math.min(vuelos.length - 1, i0 + 1), f = st.t - i0;
-      fijar(capaA, fuente(i0));
-      fijar(capaB, f > 0.001 ? fuente(i1) : null);
-      capaB.setOpacity(f);
-      if (f > 0.001) errores(fuente(i1));
+      mostrar(f > 0.001 && i1 !== i0 ? [[i0, 1], [i1, f]] : [[i0, 1]]);
+    } else if (st.modo === 'lado') {
+      mostrar([[st.a, 1]]);
+    } else if (st.a === st.b) {
+      mostrar([[st.a, 1]]);
     } else {
-      fijar(capaA, sA);
-      fijar(capaB, st.modo === 'lado' ? null : sB);
-      capaB.setOpacity(st.modo === 'transparencia' ? st.opac : 1);
+      mostrar([[st.a, 1], [st.b, st.modo === 'transparencia' ? st.opac : 1]], st.modo === 'deslizador' ? st.b : null);
     }
-    fijar(capaB2, st.modo === 'lado' ? sB : null);
+    if (st.modo === 'lado') { if (capaB2.getSource() !== fuente(st.b)) capaB2.setSource(fuente(st.b)); visibles.push(st.b); }
+    else if (capaB2.getSource()) capaB2.setSource(null);
 
     $('#main').className = st.modo === 'lado' ? 'lado' : '';
     $('#mapB').hidden = st.modo !== 'lado';
@@ -314,8 +352,15 @@ main.lado{grid-template-columns:1fr 1fr;gap:2px;background:var(--line)}
     });
     sel.onchange = () => { st[k] = +sel.value; showMsg(''); aplicar(); };
   }
-  document.querySelectorAll('.seg button').forEach(b => b.onclick = () => { st.modo = b.dataset.mode; if (st.modo !== 'dia' && st.a >= st.b) st.a = Math.max(0, st.b - 1); aplicar(); });
-  $('#opac').oninput = e => { st.opac = e.target.value / 100; capaB.setOpacity(st.opac); };
+  document.querySelectorAll('.seg button').forEach(b => b.onclick = () => {
+    st.modo = b.dataset.mode;
+    // Al comparar, A y B deben ser vuelos distintos: si se pisan, B pasa al siguiente o A al anterior
+    if (st.modo !== 'dia' && st.a >= st.b) {
+      if (st.b === 0 && vuelos.length > 1) { st.a = 0; st.b = 1; } else st.a = Math.max(0, st.b - 1);
+    }
+    st.t = st.b; aplicar();
+  });
+  $('#opac').oninput = e => { st.opac = e.target.value / 100; if (st.a !== st.b) capas[st.b].setOpacity(st.opac); };
   $('#encuadrar').onclick = encuadrar;
   $('#copiar').onclick = async () => {
     try { await navigator.clipboard.writeText(location.href); $('#copiar').textContent = 'Link copiado'; }
