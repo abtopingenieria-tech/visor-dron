@@ -30,12 +30,14 @@ for %%F in (*.ecw *.tif *.tiff) do (
   set /a TOTAL+=1
   echo.
   echo === %%F ===
-  set "MASCARA="
-  gdalinfo "%%F" | findstr /b /c:"Band 4" >nul && set "MASCARA=-mask 4"
   set "REDUCIR="
   if not "%RES%"=="" set "REDUCIR=-tr %RES% %RES% -r average"
-  gdal_translate "%%F" "web\%%~nF.tif" -b 1 -b 2 -b 3 !MASCARA! !REDUCIR! -of COG -co COMPRESS=JPEG -co QUALITY=%CALIDAD% -co NUM_THREADS=ALL_CPUS -co BIGTIFF=IF_SAFER
+  REM 1) Solo RGB  2) el borde negro o blanco queda transparente (mascara)  3) COG con JPEG
+  gdal_translate -q -of VRT -b 1 -b 2 -b 3 "%%F" "web\_tmp.vrt"
+  nearblack -q -of GTiff -setmask -near 20 -color 0,0,0 -color 255,255,255 -co TILED=YES -co COMPRESS=DEFLATE -co BIGTIFF=IF_SAFER -o "web\_tmp.tif" "web\_tmp.vrt"
+  gdal_translate "web\_tmp.tif" "web\%%~nF.tif" !REDUCIR! -of COG -co COMPRESS=JPEG -co QUALITY=%CALIDAD% -co NUM_THREADS=ALL_CPUS -co BIGTIFF=IF_SAFER
   if errorlevel 1 (echo   ERROR al convertir %%F) else (echo   Listo: web\%%~nF.tif)
+  del /q "web\_tmp.vrt" "web\_tmp.tif" "web\_tmp.tif.msk" 2>nul
 )
 
 echo.

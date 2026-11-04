@@ -1,0 +1,66 @@
+name: Reparar bordes
+
+# Reprocesa los vuelos que ya están en Cloudflare R2 para que el borde vacío (negro o blanco)
+# quede transparente. Se ejecuta a mano: Actions → "Reparar bordes" → "Run workflow".
+on:
+  workflow_dispatch:
+    inputs:
+      fechas:
+        description: "Fechas a reparar separadas por coma (AAAA-MM-DD). Vacío = todos los vuelos"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agregar-vuelo
+  cancel-in-progress: false
+
+env:
+  R2_BUCKET: visor-dron
+  R2_PUBLIC_URL: https://pub-85f1f1b1acc34a97a5cd365a422a5baa.r2.dev
+
+jobs:
+  reparar:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Instalar GDAL
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gdal-bin
+
+      - name: Reprocesar vuelos
+        env:
+          FECHAS: ${{ inputs.fechas }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          FORZAR: "1"
+        run: |
+          set -euo pipefail
+          ep="https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com"
+          mkdir -p trabajo
+          echo "### Bordes reparados" >> "$GITHUB_STEP_SUMMARY"
+          python3 -c 'import json,os
+          pub=os.environ["R2_PUBLIC_URL"]+"/"
+          pedidas={f.strip() for f in os.environ.get("FECHAS","").split(",") if f.strip()}
+          for v in json.load(open("vuelos.json"))["vuelos"]:
+              if v["url"].startswith(pub) and (not pedidas or v["fecha"] in pedidas):
+                  print(v["url"][len(pub):])' > claves.txt
+          if [ ! -s claves.txt ]; then echo "No hay vuelos para reparar." | tee -a "$GITHUB_STEP_SUMMARY"; exit 0; fi
+          while read -r clave; do
+            echo "::group::$clave"
+            aws s3 cp "s3://$R2_BUCKET/$clave" "trabajo/original.tif" --endpoint-url "$ep" --only-show-errors
+            scripts/convertir.sh trabajo/original.tif "trabajo/$clave"
+            aws s3 cp "trabajo/$clave" "s3://$R2_BUCKET/$clave" --endpoint-url "$ep" --content-type image/tiff --only-show-errors
+            rm -f trabajo/original.tif "trabajo/$clave"
+            echo "- ✅ $clave" >> "$GITHUB_STEP_SUMMARY"
+            echo "::endgroup::"
+          done < claves.txt
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Recarga el visor con Ctrl + F5 para ver los cambios." >> "$GITHUB_STEP_SUMMARY"

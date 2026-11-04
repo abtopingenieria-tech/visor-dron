@@ -52,6 +52,11 @@ Configuración del bucket (ya hecha): acceso público por `r2.dev` y política C
 El plan gratis de R2 trae 10 GB. Un ortomosaico de 3 GB sin comprimir queda en unos 150 a 300 MB, o sea 30 a 60 vuelos.
 Pasado eso, R2 cobra US$ 0,015 por GB al mes (100 GB ≈ US$ 1,5 al mes).
 
+## Borde negro o blanco
+
+Al convertir, el borde vacío del ortomosaico (negro o blanco puro, según el software) queda transparente para que se vea
+el mapa de fondo. Para vuelos subidos antes de este cambio: **Actions → Reparar bordes → Run workflow** (vacío = todos).
+
 ## Si tus ortomosaicos están en ECW: `convertir.bat`
 
 El ECW no se puede abrir en la nube, así que se convierte en tu computador (Windows):
