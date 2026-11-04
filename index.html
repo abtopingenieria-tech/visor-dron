@@ -5,119 +5,223 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Visor de Avance Dron</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@9.2.4/ol.css">
 <style>
-/* Layout: barra superior con modo y fechas; mapa al centro; línea de tiempo de vuelos abajo */
+/* Layout: mapa a pantalla completa; paneles de vidrio flotantes (título arriba a la izquierda, modos arriba
+   a la derecha, línea de tiempo a escala real abajo). Estética de inspección de obra: tinta oscura,
+   ámbar de alta visibilidad para el vuelo B y cian para el A. */
 :root{
-  --bg:#eef1ef; --panel:#ffffff; --fg:#17201d; --muted:#5c6964; --line:#d3dad6;
-  --accent:#0d6e62; --ink:#ffffff; --a:#0d6e62; --b:#b8661a; --danger:#b3261e;
-  --display:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
-  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --ink:#0d1214; --glass:rgba(14,19,21,.78); --glass-strong:rgba(14,19,21,.92); --line:rgba(255,255,255,.12);
+  --fg:#eef2f0; --muted:#9aa7a2; --faint:#5f6c67;
+  --amber:#f3b23c; --cyan:#5cc8e8; --plano:#ff6ad5; --danger:#ff8a7a;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --r:14px; --gap:12px;
+  color-scheme:dark;
 }
-@media (prefers-color-scheme: dark){:root{
-  --bg:#121816; --panel:#1a221f; --fg:#e4ebe8; --muted:#97a59f; --line:#2c3833;
-  --accent:#3fb3a2; --ink:#06201b; --a:#3fb3a2; --b:#e39a52; --danger:#f28b82; color-scheme:dark}}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{height:100%;margin:0}
-body{background:var(--bg);color:var(--fg);font:14px/1.45 var(--body);display:flex;flex-direction:column}
-header{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;
-  padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));
-  padding-top:max(10px,env(safe-area-inset-top,0px));background:var(--panel);border-bottom:1px solid var(--line)}
-h1{font:600 20px var(--display);margin:0;letter-spacing:.01em}
-.sub{color:var(--muted);font-size:13px}
-.title{display:flex;flex-direction:column;min-width:0;margin-right:auto}
-.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
-.seg button{border:none;background:transparent;color:var(--fg);padding:7px 12px;cursor:pointer;font:500 13px var(--body)}
-.seg button+button{border-left:1px solid var(--line)}
-.seg button[aria-pressed=true]{background:var(--fg);color:var(--bg)}
-.sel{display:flex;align-items:center;gap:6px;font-size:13px}
-.sel select{font:13px var(--mono);padding:6px 8px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--fg);max-width:46vw}
-.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
-.opac{display:flex;gap:8px;align-items:center;font-size:13px}
-.btn{border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:6px;height:32px;padding:0 10px;cursor:pointer;font:500 13px var(--body)}
-button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-main{flex:1;position:relative;display:grid;grid-template-columns:1fr;min-height:0}
-main.lado{grid-template-columns:1fr 1fr;gap:2px;background:var(--line)}
-.map{position:relative;min-width:0;min-height:0;background:#1b2420}
-.tag{position:absolute;top:10px;z-index:5;font:12px var(--mono);padding:3px 8px;border-radius:4px;color:#fff;pointer-events:none}
-.ta{left:52px;background:color-mix(in srgb,var(--a) 85%,#000)}
-.tb{right:10px;background:color-mix(in srgb,var(--b) 85%,#000)}
-.split{position:absolute;top:0;bottom:0;width:2px;background:#fff;z-index:6;transform:translateX(-1px);cursor:ew-resize;touch-action:none}
-.split span{position:absolute;top:50%;left:50%;width:36px;height:36px;margin:-18px 0 0 -18px;border-radius:50%;background:#fff;color:#1b2420;display:grid;place-items:center;font:600 14px var(--mono);box-shadow:0 1px 6px rgba(0,0,0,.4)}
-.cargando{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);z-index:6;font:12px var(--mono);padding:4px 10px;border-radius:999px;background:rgba(18,24,22,.8);color:#e4ebe8;pointer-events:none}
-.cargando::before{content:"";display:inline-block;width:8px;height:8px;margin-right:6px;border-radius:50%;background:var(--accent);animation:pulso 1s ease-in-out infinite}
+body{background:var(--ink);color:var(--fg);font:14px/1.4 var(--body);overflow:hidden}
+button,select,input{font:inherit;color:inherit}
+button:focus-visible,select:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+/* ---------- mapa ---------- */
+main{position:fixed;inset:0;display:grid;grid-template-columns:1fr}
+main.lado{grid-template-columns:1fr 1fr;gap:2px;background:#000}
+.map{position:relative;min-width:0;min-height:0;background:var(--ink)}
+.ol-zoom,.ol-rotate{display:none}
+.ol-attribution.ol-uncollapsible{right:auto;left:max(var(--gap),env(safe-area-inset-left,0px));top:auto;bottom:calc(var(--tl-h,150px) + 16px);background:transparent!important;max-width:60%}
+.ol-attribution ul{font:10px var(--mono);color:rgba(255,255,255,.55);text-shadow:0 1px 2px #000}
+.ol-attribution ul a{color:inherit}
+.ol-attribution button{display:none}
+.ol-scale-line{left:auto;right:max(var(--gap),env(safe-area-inset-right,0px));bottom:calc(var(--tl-h,150px) + 18px);background:var(--glass);border-radius:6px;padding:3px 6px;backdrop-filter:blur(8px)}
+.ol-scale-line-inner{border-color:var(--fg);color:var(--fg);font:10px var(--mono)}
+
+/* ---------- paneles ---------- */
+.glass{background:var(--glass);border:1px solid var(--line);border-radius:var(--r);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);box-shadow:0 8px 30px rgba(0,0,0,.35)}
+.top{position:fixed;z-index:10;top:max(var(--gap),env(safe-area-inset-top,0px));left:max(var(--gap),env(safe-area-inset-left,0px));right:max(var(--gap),env(safe-area-inset-right,0px));display:flex;gap:var(--gap);align-items:flex-start;justify-content:space-between;pointer-events:none}
+.top>*{pointer-events:auto}
+.brand{padding:10px 16px 11px;min-width:0;max-width:min(520px,60vw)}
+.eyebrow{font:500 11px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--amber)}
+h1{font:600 26px/1.05 var(--display);letter-spacing:.01em;margin:2px 0 0;text-wrap:balance;text-transform:uppercase}
+.brand .rango{font:12px var(--mono);color:var(--muted);margin-top:4px}
+.tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.seg{display:flex;padding:4px;gap:2px}
+.seg button{display:flex;align-items:center;gap:6px;border:0;background:transparent;padding:7px 11px;border-radius:10px;cursor:pointer;font:500 13px var(--body);color:var(--muted);white-space:nowrap}
+.seg button svg{width:16px;height:16px;flex:none}
+.seg button:hover{color:var(--fg);background:rgba(255,255,255,.06)}
+.seg button[aria-pressed=true]{background:var(--fg);color:var(--ink)}
+.iconos{display:flex;padding:4px;gap:2px}
+.icono{width:34px;height:34px;display:grid;place-items:center;border:0;background:transparent;border-radius:10px;cursor:pointer;color:var(--muted);position:relative}
+.icono:hover{color:var(--fg);background:rgba(255,255,255,.06)}
+.icono svg{width:18px;height:18px}
+.icono[aria-pressed=true]{color:var(--amber)}
+.pop{position:absolute;top:calc(100% + 8px);right:0;width:260px;padding:12px;z-index:12}
+.pop h2{font:500 10px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.pop label.pl{display:flex;align-items:center;gap:8px;padding:6px 4px;border-radius:8px;cursor:pointer;font-size:13px}
+.pop label.pl:hover{background:rgba(255,255,255,.06)}
+.pop input[type=checkbox]{accent-color:var(--plano);width:16px;height:16px;margin:0}
+.pop .sw{width:14px;height:3px;border-radius:2px;background:var(--plano);flex:none}
+.pop .fila{display:flex;align-items:center;gap:8px;margin-top:8px;font:11px var(--mono);color:var(--muted)}
+.pop .fila input{flex:1;accent-color:var(--plano)}
+.pop .colores{display:flex;gap:6px;margin-top:8px}
+.pop .colores button{width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0}
+.pop .colores button[aria-pressed=true]{border-color:var(--fg)}
+.wrap{position:relative}
+.icono#planoBtn[aria-pressed=true]{color:var(--plano)}
+.tip{position:absolute;top:calc(100% + 8px);right:0;white-space:nowrap;font:11px var(--mono);background:var(--glass-strong);border:1px solid var(--line);padding:4px 8px;border-radius:6px;opacity:0;pointer-events:none;transition:opacity .15s}
+.icono:hover .tip,.icono:focus-visible .tip{opacity:1}
+.wrap.abierto .tip{opacity:0!important}
+
+/* ---------- etiquetas A / B y deslizador ---------- */
+.tag{position:absolute;z-index:5;top:calc(92px + env(safe-area-inset-top,0px));display:flex;align-items:center;gap:8px;font:500 12px var(--mono);padding:5px 10px 5px 6px;border-radius:999px;background:var(--glass-strong);border:1px solid var(--line);pointer-events:none}
+.tag b{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;font:700 12px var(--display);color:var(--ink)}
+.ta{left:max(var(--gap),env(safe-area-inset-left,0px))}.ta b{background:var(--cyan)}
+.tb{right:max(var(--gap),env(safe-area-inset-right,0px))}.tb b{background:var(--amber)}
+.split{position:absolute;top:0;bottom:0;width:2px;background:var(--fg);z-index:6;transform:translateX(-1px);cursor:ew-resize;touch-action:none;box-shadow:0 0 12px rgba(0,0,0,.6)}
+.split::after{content:"";position:absolute;inset:0 -14px}
+.split span{position:absolute;top:50%;left:50%;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;background:var(--fg);color:var(--ink);display:grid;place-items:center;box-shadow:0 2px 14px rgba(0,0,0,.5)}
+.split span svg{width:20px;height:20px}
+.cargando{position:fixed;z-index:9;left:50%;transform:translateX(-50%);bottom:calc(var(--tl-h,150px) + 18px);font:12px var(--mono);padding:6px 12px;border-radius:999px;display:flex;align-items:center;gap:8px}
+.cargando::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--amber);animation:pulso 1s ease-in-out infinite}
 @keyframes pulso{50%{opacity:.25}}
-.msg{position:absolute;inset:0;display:grid;place-items:center;z-index:7;color:#e4ebe8;background:rgba(18,24,22,.85);padding:24px;text-align:center}
-.msg p{max-width:52ch;margin:0}
-.ol-control button{background:var(--panel);color:var(--fg)}
-.tl{display:flex;gap:12px;align-items:center;background:var(--panel);border-top:1px solid var(--line);
-  padding:8px max(16px,env(safe-area-inset-right,0px)) max(8px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
-.tl-btns{display:flex;gap:6px}
-.tl-btns .btn{min-width:36px;font-family:var(--mono)}
-.tl-track{flex:1;min-width:0;overflow-x:auto;scrollbar-width:thin}
-.tl-inner{display:flex;min-width:100%;position:relative}
-.tl-range{position:absolute;top:2px;height:24px;margin:0;-webkit-appearance:none;appearance:none;background:transparent;cursor:grab;z-index:2;touch-action:none}
-.tl-range:active{cursor:grabbing}
-.tl-range::-webkit-slider-runnable-track{height:24px;background:transparent}
-.tl-range::-moz-range-track{height:24px;background:transparent}
-.tl-range::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;border-radius:50%;background:var(--accent);border:3px solid var(--panel);box-shadow:0 0 0 2px var(--accent),0 2px 6px rgba(0,0,0,.35)}
-.tl-range::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--accent);border:3px solid var(--panel);box-shadow:0 0 0 2px var(--accent),0 2px 6px rgba(0,0,0,.35)}
-.tl-range:focus-visible{outline:none}
-.tl-range:focus-visible::-webkit-slider-thumb{outline:2px solid var(--fg);outline-offset:3px}
-.tl-stop{flex:1 0 96px;position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 4px 2px;
-  background:none;border:none;color:var(--muted);cursor:pointer;font:inherit;border-radius:6px}
-.tl-stop:hover{background:color-mix(in srgb,var(--fg) 6%,transparent)}
-.tl-stop::before{content:"";position:absolute;top:13px;left:0;right:0;height:2px;background:var(--line)}
-.tl-stop:first-of-type::before{left:50%}.tl-stop:last-of-type::before{right:50%}
-.tl-stop:only-of-type::before{display:none}
-.tl-dot{width:14px;height:14px;border-radius:50%;background:var(--panel);border:2px solid var(--muted);position:relative;z-index:1;transition:transform .15s}
-.tl-date{font:500 12px var(--mono);color:var(--fg);font-variant-numeric:tabular-nums;white-space:nowrap}
-.tl-name{font-size:11px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tl-gap{font:11px var(--mono);color:var(--muted)}
-.tl-stop.cur .tl-dot{background:var(--accent);border-color:var(--accent);transform:scale(1.3)}
-.tl-stop.isA .tl-dot{background:var(--a);border-color:var(--a)}
-.tl-stop.isB .tl-dot{background:var(--b);border-color:var(--b);transform:scale(1.3)}
-.tl-stop.cur .tl-date,.tl-stop.isB .tl-date{font-weight:600}
-@media (prefers-reduced-motion:reduce){.tl-dot{transition:none}.cargando::before{animation:none}}
-@media (max-width:720px){main.lado{grid-template-columns:1fr;grid-template-rows:1fr 1fr}.tb{top:auto;bottom:24px}
-  .tl{flex-wrap:wrap;gap:6px}.tl-track{flex-basis:100%;order:-1}.tl-btns{width:100%;justify-content:center}
-  .seg button{padding:7px 9px;white-space:nowrap}main{min-height:58vh}}
+.msg{position:fixed;inset:0;display:grid;place-items:center;z-index:20;background:rgba(8,11,12,.82);padding:24px;text-align:center}
+.msg p{max-width:52ch;margin:0;font-size:15px}
+
+/* ---------- panel inferior: fecha + línea de tiempo ---------- */
+.tl{position:fixed;z-index:10;left:max(var(--gap),env(safe-area-inset-left,0px));right:max(var(--gap),env(safe-area-inset-right,0px));bottom:max(var(--gap),env(safe-area-inset-bottom,0px));display:grid;grid-template-columns:auto minmax(0,1fr);gap:18px;align-items:center;padding:14px 18px 12px}
+.actual{display:flex;flex-direction:column;gap:2px;width:310px}
+.actual .lbl{font:500 10px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.actual .fecha{font:600 34px/1 var(--display);letter-spacing:.01em;text-transform:uppercase;font-variant-numeric:tabular-nums;white-space:nowrap}
+.actual .sub{font:12px var(--mono);color:var(--muted);white-space:nowrap}
+.actual .nav{display:flex;gap:6px;margin-top:8px}
+.nav button{flex:1;height:30px;border-radius:8px;border:1px solid var(--line);background:rgba(255,255,255,.04);cursor:pointer;display:grid;place-items:center;color:var(--fg)}
+.nav button:hover:not(:disabled){background:rgba(255,255,255,.1)}
+.nav button:disabled{opacity:.35;cursor:default}
+.nav svg{width:16px;height:16px}
+.ab{display:flex;gap:8px;margin-top:8px}
+.ab label{flex:1;display:flex;align-items:center;gap:6px;font:500 12px var(--mono)}
+.ab label b{display:grid;place-items:center;width:18px;height:18px;border-radius:50%;font:700 11px var(--display);color:var(--ink);flex:none}
+.ab select{width:100%;min-width:0;background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:8px;padding:5px 6px;font:12px var(--mono)}
+.ab option{background:var(--ink)}
+.opac{display:flex;align-items:center;gap:8px;margin-top:8px;font:11px var(--mono);color:var(--muted)}
+.opac input{flex:1;accent-color:var(--amber)}
+
+.escala{position:relative;height:96px;margin:0 14px;touch-action:none;user-select:none;cursor:pointer}
+.riel{position:absolute;left:0;right:0;top:38px;height:4px;border-radius:2px;background:rgba(255,255,255,.14)}
+.avance{position:absolute;left:0;top:38px;height:4px;border-radius:2px;background:linear-gradient(90deg,rgba(243,178,60,.25),var(--amber))}
+.mes{position:absolute;top:50px;transform:translateX(-50%);font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--faint);white-space:nowrap}
+.mes::before{content:"";position:absolute;left:50%;top:-10px;width:1px;height:6px;background:rgba(255,255,255,.25)}
+.hito{position:absolute;top:28px;width:24px;height:24px;margin-left:-12px;border:0;background:transparent;padding:0;cursor:pointer;display:grid;place-items:center}
+.hito i{width:12px;height:12px;border-radius:50%;background:var(--ink);border:2px solid var(--fg);transition:transform .15s}
+.hito:hover i{transform:scale(1.3)}
+.hito.isA i{background:var(--cyan);border-color:var(--cyan)}
+.hito.isB i{background:var(--amber);border-color:var(--amber)}
+.hito .et{position:absolute;bottom:calc(100% + 2px);left:50%;transform:translateX(-50%);font:500 11px var(--mono);color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.hito.cur .et,.hito.isB .et,.hito.isA .et{color:var(--fg)}
+.hito.oculta .et{display:none}
+.hito:hover .et{display:block;color:var(--fg)}
+.perilla{position:absolute;top:24px;width:32px;height:32px;margin-left:-16px;border-radius:50%;background:var(--amber);box-shadow:0 0 0 4px rgba(243,178,60,.25),0 4px 14px rgba(0,0,0,.5);cursor:grab;touch-action:none;z-index:2;display:grid;place-items:center}
+.perilla:active{cursor:grabbing}
+.perilla::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--ink)}
+.perilla.cmp{background:var(--amber)}
+.dias{position:absolute;top:70px;left:0;right:0;font:11px var(--mono);color:var(--muted);display:flex;justify-content:space-between}
+
+@media (max-width:760px){
+  :root{--gap:10px}
+  h1{font-size:20px}
+  .brand{max-width:none;flex:1;padding:8px 12px}
+  .brand .rango{display:none}
+  .top{flex-direction:column;align-items:stretch}
+  .tools{justify-content:space-between}
+  .seg button span{display:none}
+  .seg button{padding:8px 10px}
+  .tag{top:calc(122px + env(safe-area-inset-top,0px))}
+  .tl{grid-template-columns:1fr;gap:6px;padding:12px 12px 8px}
+  .actual{width:auto;min-width:0;display:grid;grid-template-columns:1fr auto;align-items:end;column-gap:10px}
+  .actual .lbl{grid-column:1/-1}
+  .actual .fecha{font-size:28px}
+  .actual .sub{grid-column:1}
+  .actual .nav{grid-row:2/4;grid-column:2;margin:0}
+  .nav button{width:40px}
+  .ab,.opac{grid-column:1/-1}
+  .escala{margin:0 12px;height:84px}
+  main.lado{grid-template-columns:1fr;grid-template-rows:1fr 1fr}
+}
+@media (prefers-reduced-motion:reduce){.hito i,.tip{transition:none}.cargando::before{animation:none}}
 </style>
 </head>
 <body>
-<header>
-  <div class="title"><h1 id="titulo">Visor de Avance Dron</h1><span class="sub" id="resumen">Cargando vuelos…</span></div>
-  <div class="controls">
-    <label class="sel" id="boxA"><span class="dot" style="background:var(--a)"></span>A <select id="selA"></select></label>
-    <label class="sel" id="boxB"><span class="dot" style="background:var(--b)"></span>B <select id="selB"></select></label>
-    <div class="seg" role="group" aria-label="Modo de comparación">
-      <button data-mode="dia" aria-pressed="true">Un día</button>
-      <button data-mode="deslizador" aria-pressed="false">Deslizador</button>
-      <button data-mode="lado" aria-pressed="false">Lado a lado</button>
-      <button data-mode="transparencia" aria-pressed="false">Transparencia</button>
+<main id="main">
+  <div class="map" id="mapA">
+    <span class="tag ta" id="tagA"><b>A</b><span></span></span>
+    <span class="tag tb" id="tagB"><b>B</b><span></span></span>
+    <div class="split" id="split" tabindex="0" role="slider" aria-label="Posición del deslizador">
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l-6 6 6 6M15 6l6 6-6 6"/></svg></span>
     </div>
-    <div class="opac" id="opacBox" hidden><label for="opac">Opacidad B</label><input type="range" id="opac" min="0" max="100" value="50"></div>
-    <button class="btn" id="encuadrar">Encuadrar</button>
-    <button class="btn" id="copiar">Copiar link</button>
+  </div>
+  <div class="map" id="mapB" hidden><span class="tag tb" id="tagB2"><b>B</b><span></span></span></div>
+</main>
+
+<header class="top">
+  <div class="brand glass">
+    <div class="eyebrow" id="eyebrow">Avance de obra</div>
+    <h1 id="titulo">Visor de Avance Dron</h1>
+    <div class="rango" id="resumen">Cargando vuelos…</div>
+  </div>
+  <div class="tools">
+    <div class="seg glass" role="group" aria-label="Modo de visualización">
+      <button data-mode="dia" aria-pressed="true" title="Un día"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 15l5-5 4 4 3-3 6 6"/></svg><span>Un día</span></button>
+      <button data-mode="deslizador" aria-pressed="false" title="Deslizador"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 3v18"/></svg><span>Deslizador</span></button>
+      <button data-mode="lado" aria-pressed="false" title="Lado a lado"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="9" height="16" rx="2"/><rect x="13" y="4" width="9" height="16" rx="2"/></svg><span>Lado a lado</span></button>
+      <button data-mode="transparencia" aria-pressed="false" title="Transparencia"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/></svg><span>Transparencia</span></button>
+    </div>
+    <div class="iconos glass">
+      <div class="wrap" id="planoWrap" hidden>
+        <button class="icono" id="planoBtn" aria-pressed="false" aria-expanded="false" aria-label="Plano de diseño (DXF)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V3h18v18z"/><path d="M3 9h6v12M9 9l6 6M15 3v6h6"/></svg><span class="tip">Plano de diseño</span></button>
+        <div class="pop glass" id="planoPop" hidden>
+          <h2>Planos de diseño</h2>
+          <div id="planoLista"></div>
+          <div class="fila"><label for="planoOpac">Opacidad</label><input type="range" id="planoOpac" min="10" max="100" value="90"></div>
+          <div class="colores" id="planoColores" aria-label="Color del plano"></div>
+        </div>
+      </div>
+      <button class="icono" id="fondo" aria-pressed="true" aria-label="Cambiar fondo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></svg><span class="tip" id="fondoTip">Fondo: satélite</span></button>
+      <button class="icono" id="encuadrar" aria-label="Encuadrar la obra"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span class="tip">Encuadrar la obra</span></button>
+      <button class="icono" id="copiar" aria-label="Copiar link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg><span class="tip" id="copiarTip">Copiar link de esta vista</span></button>
+    </div>
   </div>
 </header>
-<main id="main">
-  <div class="map" id="mapA"><span class="tag ta" id="tagA"></span><span class="tag tb" id="tagB"></span><div class="split" id="split" tabindex="0" role="slider" aria-label="Posición del deslizador"><span>⇔</span></div></div>
-  <div class="map" id="mapB" hidden><span class="tag tb" id="tagB2"></span></div>
-  <span class="cargando" id="cargando" hidden role="status">Cargando imagen…</span>
-  <div class="msg" id="msg" hidden><p id="msgText"></p></div>
-</main>
-<footer class="tl" aria-label="Línea de tiempo de vuelos">
-  <div class="tl-btns">
-    <button class="btn" id="prev" aria-label="Vuelo anterior">◀</button>
-    <button class="btn" id="next" aria-label="Vuelo siguiente">▶</button>
+
+<section class="tl glass" id="panelTl" aria-label="Línea de tiempo de vuelos">
+  <div class="actual">
+    <span class="lbl" id="lblActual">Vuelo</span>
+    <span class="fecha" id="fechaActual">—</span>
+    <span class="sub" id="subActual"></span>
+    <div class="nav">
+      <button id="prev" aria-label="Vuelo anterior"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <button id="next" aria-label="Vuelo siguiente"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>
+    </div>
+    <div class="ab" id="ab" hidden>
+      <label><b style="background:var(--cyan)">A</b><select id="selA" aria-label="Vuelo A"></select></label>
+      <label><b style="background:var(--amber)">B</b><select id="selB" aria-label="Vuelo B"></select></label>
+    </div>
+    <div class="opac" id="opacBox" hidden><label for="opac">Opacidad B</label><input type="range" id="opac" min="0" max="100" value="50"></div>
   </div>
-  <div class="tl-track"><div class="tl-inner" id="tl"><input type="range" class="tl-range" id="tlRange" min="0" step="0.01" aria-label="Arrastra para recorrer las fechas"></div></div>
-</footer>
+  <div class="escala" id="escala">
+    <div class="riel"></div>
+    <div class="avance" id="avance"></div>
+    <div id="meses"></div>
+    <div id="hitos"></div>
+    <div class="perilla" id="perilla" tabindex="0" role="slider" aria-label="Arrastra para recorrer las fechas"></div>
+  </div>
+</section>
+
+<span class="cargando glass" id="cargando" hidden role="status">Cargando imagen…</span>
+<div class="msg" id="msg" hidden><p id="msgText"></p></div>
 
 <script src="https://cdn.jsdelivr.net/npm/proj4@2.11.0/dist/proj4.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.js"></script>
@@ -126,16 +230,19 @@ main.lado{grid-template-columns:1fr 1fr;gap:2px;background:var(--line)}
 (async () => {
   const $ = s => document.querySelector(s);
 
-  // Zonas UTM WGS84 (EPSG:326xx norte, 327xx sur), que es como exportan casi todos los softwares de fotogrametría.
+  // Zonas UTM WGS84 (EPSG:326xx norte, 327xx sur) y SIRGAS 2000 UTM sur (EPSG:31977 a 31985)
   for (let z = 1; z <= 60; z++) {
     proj4.defs('EPSG:' + (32600 + z), `+proj=utm +zone=${z} +datum=WGS84 +units=m +no_defs`);
     proj4.defs('EPSG:' + (32700 + z), `+proj=utm +zone=${z} +south +datum=WGS84 +units=m +no_defs`);
   }
-  // SIRGAS-Chile / SIRGAS 2000 UTM sur (zonas 17 a 25)
   for (let z = 17; z <= 25; z++) proj4.defs('EPSG:' + (31960 + z), `+proj=utm +zone=${z} +south +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs`);
   ol.proj.proj4.register(proj4);
 
-  const fmt = d => { try { return new Date(d + 'T12:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' }); } catch (e) { return d; } };
+  const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const aFecha = d => new Date(d + 'T12:00:00');
+  const fmt = d => { const x = aFecha(d); return `${String(x.getDate()).padStart(2, '0')} ${MESES[x.getMonth()]} ${x.getFullYear()}`; };
+  const fmtCorta = d => { const x = aFecha(d); return `${x.getDate()} ${MESES[x.getMonth()]}`; };
+  const dias = (d1, d2) => Math.round((aFecha(d2) - aFecha(d1)) / 864e5);
   const showMsg = t => { $('#msgText').textContent = t; $('#msg').hidden = !t; };
 
   let cfg;
@@ -145,21 +252,24 @@ main.lado{grid-template-columns:1fr 1fr;gap:2px;background:var(--line)}
   } catch (e) { showMsg('No se pudo leer vuelos.json. Revisa que el archivo exista y sea JSON válido.'); return; }
 
   const vuelos = (cfg.vuelos || []).slice().sort((x, y) => x.fecha.localeCompare(y.fecha));
+  const n = vuelos.length;
   if (cfg.titulo) { $('#titulo').textContent = cfg.titulo; document.title = cfg.titulo; }
-  if (!vuelos.length) { showMsg('Aún no hay vuelos en vuelos.json. Agrega el primero siguiendo el README.'); $('#resumen').textContent = 'Sin vuelos'; return; }
-  $('#resumen').textContent = `${vuelos.length} vuelo${vuelos.length > 1 ? 's' : ''} · ${fmt(vuelos[0].fecha)} – ${fmt(vuelos.at(-1).fecha)}`;
+  if (!n) { showMsg('Aún no hay vuelos. Agrégalos con la acción "Agregar vuelos" (ver README).'); $('#resumen').textContent = 'Sin vuelos'; return; }
+  $('#eyebrow').textContent = `Avance de obra · ${n} vuelo${n > 1 ? 's' : ''}`;
+  $('#resumen').textContent = `${fmt(vuelos[0].fecha)} — ${fmt(vuelos[n - 1].fecha)} · ${dias(vuelos[0].fecha, vuelos[n - 1].fecha)} días`;
 
-  // Estado inicial: penúltimo vs último vuelo, o lo que venga en el link (#a=...&b=...&modo=...)
+  // Estado inicial: último vuelo (o lo que venga en el link: #a=...&b=...&modo=...)
   const h = new URLSearchParams(location.hash.slice(1));
-  const idx = k => { const v = h.get(k); const i = vuelos.findIndex(x => x.fecha === v); return i; };
+  const idx = k => vuelos.findIndex(x => x.fecha === h.get(k));
   const st = {
-    a: idx('a') >= 0 ? idx('a') : Math.max(0, vuelos.length - 2),
-    b: idx('b') >= 0 ? idx('b') : vuelos.length - 1,
+    a: idx('a') >= 0 ? idx('a') : Math.max(0, n - 2),
+    b: idx('b') >= 0 ? idx('b') : n - 1,
     modo: ['dia', 'deslizador', 'lado', 'transparencia'].includes(h.get('modo')) ? h.get('modo') : 'dia',
     split: .5, opac: .5, t: 0,
   };
+  st.t = st.b;
 
-  // Fuentes GeoTIFF: una por vuelo. Se cuentan los mosaicos pendientes para mostrar "Cargando…"
+  // ---------- fuentes y capas ----------
   const fuentes = new Map(), pendientes = new Map();
   const fuente = i => {
     if (!fuentes.has(i)) {
@@ -176,19 +286,14 @@ main.lado{grid-template-columns:1fr 1fr;gap:2px;background:var(--line)}
     return fuentes.get(i);
   };
 
-  // Estilo de cada vuelo. Los archivos convertidos traen una máscara que deja transparente el borde
-  // vacío. Para archivos antiguos sin máscara (3 bandas), el negro o blanco puro se oculta aquí.
-  const NEGRO = 0.05, BLANCO = 0.97;  // en escala 0–1 (≈ 13 y 247 de 255), con margen para la compresión JPEG
+  // Archivos con máscara: se usa su transparencia. Archivos antiguos sin máscara: negro/blanco puro se oculta.
+  const NEGRO = 0.05, BLANCO = 0.97;
   function estiloPara(src) {
-    const n = src.bandCount || 3;
-    if (n >= 4) return { color: ['color', ['*', ['band', 1], 255], ['*', ['band', 2], 255], ['*', ['band', 3], 255], ['band', n]] };
-    const alfa = 1;
+    const nb = src.bandCount || 3;
+    const rgb = [['*', ['band', 1], 255], ['*', ['band', 2], 255], ['*', ['band', 3], 255]];
+    if (nb >= 4) return { color: ['color', ...rgb, ['band', nb]] };
     const todas = (op, v) => ['all', [op, ['band', 1], v], [op, ['band', 2], v], [op, ['band', 3], v]];
-    return {
-      color: ['case',
-        ['any', todas('<', NEGRO), todas('>', BLANCO)], [0, 0, 0, 0],
-        ['color', ['*', ['band', 1], 255], ['*', ['band', 2], 255], ['*', ['band', 3], 255], alfa]],
-    };
+    return { color: ['case', ['any', todas('<', NEGRO), todas('>', BLANCO)], [0, 0, 0, 0], ['color', ...rgb, 1]] };
   }
   function conEstilo(capa, src) {
     const poner = () => capa.setStyle(estiloPara(src));
@@ -197,15 +302,45 @@ main.lado{grid-template-columns:1fr 1fr;gap:2px;background:var(--line)}
     });
   }
 
-  const base = () => new ol.layer.Tile({ source: new ol.source.OSM() });
-  const view = new ol.View({ center: ol.proj.fromLonLat([-70.65, -33.45]), zoom: 5, maxZoom: 24 });
+  // Fondo: satélite (Esri World Imagery) o mapa (OpenStreetMap)
+  const satelite = () => new ol.layer.Tile({ source: new ol.source.XYZ({
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    maxZoom: 19, attributions: 'Imágenes © Esri, Maxar, Earthstar Geographics' }) });
+  const calles = () => new ol.layer.Tile({ source: new ol.source.OSM(), visible: false });
+  const fondosA = [satelite(), calles()], fondosB = [satelite(), calles()];
 
-  // Una capa por vuelo, todas en el mismo mapa. Cambiar de fecha solo cambia opacidades, así que es
-  // inmediato; las fechas vecinas se mantienen cargadas con opacidad 0 para que estén listas.
+  // ---------- planos de diseño (DXF convertido a GeoJSON por la acción) ----------
+  const planos = (cfg.planos || []).filter(p => p && p.url);
+  const COLORES = ['#ff6ad5', '#ffffff', '#ffe14d', '#4dff88', '#ff5a4d'];
+  const ps = { on: new Set((h.get('plano') || '').split(',').filter(Boolean).map(Number).filter(i => i < planos.length)), color: COLORES[0], opac: .9 };
+  const estilos = new Map();
+  function estiloPlano(f, res) {
+    const g = f.getGeometry().getType(), txt = g === 'Point' && f.get('Text');
+    if (txt) {
+      if (res > 0.6) return null;  // los textos solo se ven de cerca
+      return new ol.style.Style({ text: new ol.style.Text({ text: String(txt), font: '500 12px "IBM Plex Mono",monospace',
+        fill: new ol.style.Fill({ color: ps.color }), stroke: new ol.style.Stroke({ color: 'rgba(0,0,0,.75)', width: 3 }) }) });
+    }
+    const k = g.includes('Point') ? 'p' : 'l';
+    if (!estilos.has(k)) estilos.set(k, k === 'p'
+      ? new ol.style.Style({ image: new ol.style.Circle({ radius: 2.5, fill: new ol.style.Fill({ color: ps.color }) }) })
+      : [new ol.style.Style({ stroke: new ol.style.Stroke({ color: 'rgba(0,0,0,.55)', width: 3.5 }) }),
+         new ol.style.Style({ stroke: new ol.style.Stroke({ color: ps.color, width: 1.6 }) })]);
+    return estilos.get(k);
+  }
+  const fuentesPlano = planos.map(p => {
+    const src = new ol.source.Vector({ url: p.url, format: new ol.format.GeoJSON() });
+    src.on('featuresloaderror', () => showMsg(`No se pudo cargar el plano "${p.nombre || p.url}".`));
+    return src;
+  });
+  const capaPlano = () => fuentesPlano.map((src, i) => new ol.layer.Vector({ source: src, style: estiloPlano, zIndex: 1000,
+    visible: ps.on.has(i), opacity: ps.opac, declutter: false, updateWhileInteracting: false }));
+  const planosA = capaPlano(), planosB = capaPlano();
+
+  const view = new ol.View({ center: ol.proj.fromLonLat([-70.65, -33.45]), zoom: 5, maxZoom: 24 });
   let capaRecorte = null;
   const capas = vuelos.map((v, i) => {
     const capa = new ol.layer.WebGLTile({ source: fuente(i), visible: false, preload: 2 });
-    // Deslizador: la capa B solo se dibuja a la derecha de la línea
     capa.on('prerender', e => {
       if (capa !== capaRecorte) return;
       const gl = e.context, size = mapA.getSize();
@@ -219,29 +354,66 @@ main.lado{grid-template-columns:1fr 1fr;gap:2px;background:var(--line)}
     return capa;
   });
   const capaB2 = new ol.layer.WebGLTile({ preload: 2 });
-  const mapA = new ol.Map({ target: 'mapA', layers: [base(), ...capas], view });
-  const mapB = new ol.Map({ target: 'mapB', layers: [base(), capaB2], view });
+  const controles = () => ol.control.defaults.defaults({ zoom: false, rotate: false, attributionOptions: { collapsible: false } });
+  const mapA = new ol.Map({ target: 'mapA', layers: [...fondosA, ...capas, ...planosA], view, controls: controles().extend([new ol.control.ScaleLine({ units: 'metric' })]) });
+  const mapB = new ol.Map({ target: 'mapB', layers: [...fondosB, capaB2, ...planosB], view, controls: controles() });
 
-  let visibles = [];
-  function estadoCarga() {
-    const cargando = visibles.some(i => pendientes.get(i) > 0);
-    $('#cargando').hidden = !cargando;
+  function pintarPlanos() {
+    [planosA, planosB].forEach(cs => cs.forEach((c, i) => { c.setVisible(ps.on.has(i)); c.setOpacity(ps.opac); c.changed(); }));
+    $('#planoBtn').setAttribute('aria-pressed', ps.on.size > 0);
+    document.documentElement.style.setProperty('--plano', ps.color);
+    guardarHash();
+  }
+  if (planos.length) {
+    $('#planoWrap').hidden = false;
+    planos.forEach((p, i) => {
+      const l = document.createElement('label'); l.className = 'pl';
+      l.innerHTML = '<input type="checkbox"><span class="sw"></span><span></span>';
+      l.lastChild.textContent = p.nombre || 'Plano ' + (i + 1);
+      const cb = l.querySelector('input'); cb.checked = ps.on.has(i);
+      cb.onchange = () => { cb.checked ? ps.on.add(i) : ps.on.delete(i); pintarPlanos(); };
+      $('#planoLista').appendChild(l);
+    });
+    COLORES.forEach(c => {
+      const b = document.createElement('button'); b.style.background = c; b.setAttribute('aria-label', 'Color ' + c);
+      b.setAttribute('aria-pressed', c === ps.color);
+      b.onclick = () => { ps.color = c; estilos.clear(); $('#planoColores').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b)); pintarPlanos(); };
+      $('#planoColores').appendChild(b);
+    });
+    $('#planoOpac').oninput = e => { ps.opac = e.target.value / 100; pintarPlanos(); };
+    const abrir = v => { $('#planoPop').hidden = !v; $('#planoWrap').classList.toggle('abierto', v); $('#planoBtn').setAttribute('aria-expanded', v); };
+    $('#planoBtn').onclick = e => {
+      e.stopPropagation();
+      // Con un solo plano el botón lo prende al abrir; el panel permite color y opacidad
+      if ($('#planoPop').hidden && planos.length === 1 && !ps.on.size) { ps.on.add(0); $('#planoLista input').checked = true; pintarPlanos(); }
+      abrir($('#planoPop').hidden);
+    };
+    document.addEventListener('pointerdown', e => { if (!e.target.closest('#planoWrap')) abrir(false); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') abrir(false); });
+    $('#planoBtn').setAttribute('aria-pressed', ps.on.size > 0);
   }
 
-  // roles: [[índice, opacidad], ...] de abajo hacia arriba. Precarga: vecinos con opacidad 0.
+  $('#fondo').onclick = () => {
+    const sat = !fondosA[0].getVisible();
+    [fondosA, fondosB].forEach(([s, c]) => { s.setVisible(sat); c.setVisible(!sat); });
+    $('#fondo').setAttribute('aria-pressed', sat);
+    $('#fondoTip').textContent = 'Fondo: ' + (sat ? 'satélite' : 'mapa');
+  };
+
+  let visibles = [];
+  function estadoCarga() { $('#cargando').hidden = !visibles.some(i => pendientes.get(i) > 0); }
+
+  // roles: [[índice, opacidad], ...] de abajo hacia arriba; las fechas vecinas se precargan con opacidad 0
   function mostrar(roles, recorte) {
-    const n = vuelos.length, activos = new Map(roles.map(([i, op], z) => [i, [op, z + 1]]));
+    const activos = new Map(roles.map(([i, op], z) => [i, [op, z + 1]]));
     const ancla = roles.length ? roles[roles.length - 1][0] : 0;
     const precarga = new Set();
     if (n <= 6) for (let i = 0; i < n; i++) precarga.add(i);
     else for (let d = -2; d <= 2; d++) if (ancla + d >= 0 && ancla + d < n) precarga.add(ancla + d);
     capas.forEach((capa, i) => {
-      if (activos.has(i)) {
-        const [op, z] = activos.get(i);
-        capa.setVisible(true); capa.setOpacity(op); capa.setZIndex(z);
-      } else if (precarga.has(i)) {
-        capa.setVisible(true); capa.setOpacity(0); capa.setZIndex(0);
-      } else capa.setVisible(false);
+      if (activos.has(i)) { const [op, z] = activos.get(i); capa.setVisible(true); capa.setOpacity(op); capa.setZIndex(z); }
+      else if (precarga.has(i)) { capa.setVisible(true); capa.setOpacity(0); capa.setZIndex(0); }
+      else capa.setVisible(false);
     });
     capaRecorte = recorte != null ? capas[recorte] : null;
     visibles = roles.filter(([, op]) => op > 0).map(([i]) => i);
@@ -253,22 +425,131 @@ main.lado{grid-template-columns:1fr 1fr;gap:2px;background:var(--line)}
     try {
       const v = await fuente(st.b).getView();
       const ext = ol.proj.transformExtent(v.extent, v.projection, 'EPSG:3857');
-      view.fit(ext, { size: (st.modo === 'lado' ? mapB : mapA).getSize(), padding: [20, 20, 20, 20], duration: encuadrado ? 300 : 0 });
+      const alto = $('#panelTl').offsetHeight, arriba = document.querySelector('.top').offsetHeight;
+      view.fit(ext, { size: (st.modo === 'lado' ? mapB : mapA).getSize(), padding: [arriba + 24, 24, alto + 30, 24], duration: encuadrado ? 400 : 0 });
       encuadrado = true;
     } catch (e) {
       showMsg('No se pudo leer la ubicación del GeoTIFF. Debe estar georreferenciado (UTM WGS84, SIRGAS UTM o Web Mercator).');
     }
   }
 
+  // ---------- línea de tiempo a escala real ----------
+  const t0 = aFecha(vuelos[0].fecha), tN = aFecha(vuelos[n - 1].fecha), span = Math.max(1, tN - t0);
+  const pos = vuelos.map(v => n > 1 ? (aFecha(v.fecha) - t0) / span : 0.5);  // 0..1
+  const escala = $('#escala');
+  // Meses
+  const meses = $('#meses');
+  if (n > 1) {
+    const m = new Date(t0.getFullYear(), t0.getMonth() + 1, 1);
+    const totalMeses = (tN.getFullYear() - t0.getFullYear()) * 12 + tN.getMonth() - t0.getMonth();
+    const cada = Math.max(1, Math.ceil(totalMeses / 10));
+    for (let k = 0; m <= tN; k++, m.setMonth(m.getMonth() + 1)) {
+      if (k % cada) continue;
+      const e = document.createElement('span');
+      e.className = 'mes'; e.style.left = ((m - t0) / span * 100) + '%';
+      e.textContent = MESES[m.getMonth()] + (m.getMonth() === 0 ? ' ' + m.getFullYear() : '');
+      meses.appendChild(e);
+    }
+  }
+  // Hitos (un punto por vuelo)
+  const hitos = $('#hitos');
+  vuelos.forEach((v, i) => {
+    const b = document.createElement('button');
+    b.className = 'hito'; b.style.left = (pos[i] * 100) + '%';
+    b.setAttribute('aria-label', fmt(v.fecha) + (v.nombre ? ' · ' + v.nombre : ''));
+    b.innerHTML = '<i></i><span class="et"></span>';
+    b.querySelector('.et').textContent = fmtCorta(v.fecha);
+    b.onclick = e => { e.stopPropagation(); ir(i); };
+    hitos.appendChild(b);
+  });
+  // Oculta etiquetas que se pisan (se muestran al pasar el mouse); la actual siempre se ve
+  function etiquetas() {
+    const w = escala.clientWidth, minimo = 46, puestos = [];
+    const bs = [...hitos.querySelectorAll('.hito')];
+    const prioridad = i => (i === st.b || (st.modo !== 'dia' && i === st.a)) ? 0 : (i === 0 || i === n - 1) ? 1 : 2;
+    bs.map((b, i) => i).sort((x, y) => prioridad(x) - prioridad(y) || x - y).forEach(i => {
+      const x = pos[i] * w, choca = puestos.some(p => Math.abs(p - x) < minimo);
+      bs[i].classList.toggle('oculta', choca && prioridad(i) > 0);
+      if (!choca || prioridad(i) === 0) puestos.push(x);
+    });
+  }
+  new ResizeObserver(() => { etiquetas(); document.documentElement.style.setProperty('--tl-h', $('#panelTl').offsetHeight + 'px'); }).observe($('#panelTl'));
+
+  // t (índice continuo) <-> posición 0..1 en la escala de tiempo
+  const tAPos = t => { const i = Math.floor(t), f = t - i; return i >= n - 1 ? pos[n - 1] : pos[i] + (pos[i + 1] - pos[i]) * f; };
+  function posAT(p) {
+    if (p <= pos[0]) return 0;
+    for (let i = 0; i < n - 1; i++) if (p <= pos[i + 1]) return i + (p - pos[i]) / Math.max(1e-9, pos[i + 1] - pos[i]);
+    return n - 1;
+  }
+  const perilla = $('#perilla');
+  let arrastrando = false;
+  const desdeEvento = e => { const r = escala.getBoundingClientRect(); return Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)); };
+  function moverA(p, soltar) {
+    let t = posAT(p);
+    if (st.modo !== 'dia' || soltar) {
+      const r = Math.round(t);
+      if (st.modo !== 'dia' || Math.abs(t - r) < 0.12) t = r;  // al soltar cerca de un vuelo, se ajusta
+    }
+    st.t = t; st.b = Math.round(t);
+    if (st.modo !== 'dia' && st.a >= st.b) st.a = Math.max(0, st.b - 1);
+    if (st.modo !== 'dia' && st.a === st.b && n > 1) st.b = Math.min(n - 1, st.a + 1);
+    aplicar(!soltar);
+  }
+  escala.addEventListener('pointerdown', e => { if (n < 2) return; arrastrando = true; escala.setPointerCapture(e.pointerId); moverA(desdeEvento(e)); });
+  escala.addEventListener('pointermove', e => { if (arrastrando) moverA(desdeEvento(e)); });
+  const soltar = e => { if (!arrastrando) return; arrastrando = false; moverA(desdeEvento(e), true); };
+  escala.addEventListener('pointerup', soltar); escala.addEventListener('pointercancel', soltar);
+  perilla.addEventListener('keydown', e => {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { e.preventDefault(); ir(st.t % 1 ? Math.floor(st.t) : st.b - 1); }
+    if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { e.preventDefault(); ir(st.t % 1 ? Math.ceil(st.t) : st.b + 1); }
+  });
+
+  function linea(arrastrando) {
+    const dia = st.modo === 'dia';
+    const p = tAPos(dia ? st.t : st.b);
+    perilla.style.left = (p * 100) + '%';
+    $('#avance').style.width = (p * 100) + '%';
+    perilla.setAttribute('aria-valuetext', fmt(vuelos[st.b].fecha));
+    hitos.querySelectorAll('.hito').forEach((b, i) => {
+      b.classList.toggle('cur', dia && i === st.b);
+      b.classList.toggle('isA', !dia && i === st.a);
+      b.classList.toggle('isB', !dia && i === st.b);
+    });
+    if (!arrastrando) etiquetas();
+    $('#prev').disabled = st.t <= 0; $('#next').disabled = st.t >= n - 1;
+
+    // Panel de fecha
+    const v = vuelos[st.b], entre = dia && Math.abs(st.t - Math.round(st.t)) > 0.01;
+    $('#lblActual').textContent = dia ? (entre ? 'Transición' : 'Vuelo ' + (st.b + 1) + ' de ' + n) : 'Comparando';
+    $('#fechaActual').textContent = dia ? (entre ? `${fmtCorta(vuelos[Math.floor(st.t)].fecha)} → ${fmtCorta(vuelos[Math.ceil(st.t)].fecha)}` : fmt(v.fecha))
+      : `${dias(vuelos[st.a].fecha, v.fecha)} días`;
+    const desde = dias(vuelos[0].fecha, v.fecha), previo = st.b ? dias(vuelos[st.b - 1].fecha, v.fecha) : null;
+    $('#subActual').textContent = dia
+      ? [v.nombre, st.b ? `día ${desde} · +${previo} desde el anterior` : 'primer vuelo'].filter(Boolean).join(' · ')
+      : `${fmt(vuelos[st.a].fecha)} → ${fmt(v.fecha)}`;
+  }
+
+  // Ir a un vuelo: en "Un día" lo muestra; al comparar lo deja como B y A pasa a ser el anterior si hace falta
+  function ir(i) {
+    i = Math.max(0, Math.min(n - 1, i));
+    st.b = i; st.t = i;
+    if (st.modo !== 'dia' && st.a >= st.b) st.a = Math.max(0, st.b - 1);
+    if (st.modo !== 'dia' && st.a === st.b && n > 1) st.b = Math.min(n - 1, st.a + 1);
+    showMsg(''); aplicar();
+  }
+
+  function guardarHash() {
+    const pl = ps.on.size ? '&plano=' + [...ps.on].join(',') : '';
+    try { history.replaceState(null, '', `#a=${vuelos[st.a].fecha}&b=${vuelos[st.b].fecha}&modo=${st.modo}${pl}`); } catch (e) {}
+  }
+
   function aplicar(arrastrando) {
     const dia = st.modo === 'dia';
     if (dia) {
-      // Entre dos vuelos se funden: f = 0 muestra el anterior, f = 1 el siguiente
-      const i0 = Math.floor(st.t), i1 = Math.min(vuelos.length - 1, i0 + 1), f = st.t - i0;
+      const i0 = Math.floor(st.t), i1 = Math.min(n - 1, i0 + 1), f = st.t - i0;
       mostrar(f > 0.001 && i1 !== i0 ? [[i0, 1], [i1, f]] : [[i0, 1]]);
-    } else if (st.modo === 'lado') {
-      mostrar([[st.a, 1]]);
-    } else if (st.a === st.b) {
+    } else if (st.modo === 'lado' || st.a === st.b) {
       mostrar([[st.a, 1]]);
     } else {
       mostrar([[st.a, 1], [st.b, st.modo === 'transparencia' ? st.opac : 1]], st.modo === 'deslizador' ? st.b : null);
@@ -282,132 +563,64 @@ main.lado{grid-template-columns:1fr 1fr;gap:2px;background:var(--line)}
     $('#split').style.left = (st.split * 100) + '%';
     $('#split').setAttribute('aria-valuenow', Math.round(st.split * 100));
     $('#opacBox').hidden = st.modo !== 'transparencia';
+    $('#ab').hidden = dia;
     document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === st.modo));
 
-    const ta = 'A · ' + fmt(vuelos[st.a].fecha), tb = 'B · ' + fmt(vuelos[st.b].fecha);
-    const entre = dia && st.t % 1 > 0.001;
-    $('#tagA').textContent = entre ? `${fmt(vuelos[Math.floor(st.t)].fecha)} → ${fmt(vuelos[Math.ceil(st.t)].fecha)}`
-      : dia ? fmt(vuelos[st.b].fecha) + (vuelos[st.b].nombre ? ' · ' + vuelos[st.b].nombre : '') : ta;
-    $('#tagB').textContent = tb; $('#tagB').hidden = st.modo === 'lado' || dia;
-    $('#boxA').hidden = $('#boxB').hidden = dia;
+    $('#tagA').hidden = dia; $('#tagB').hidden = dia || st.modo === 'lado';
+    $('#tagA span').textContent = fmt(vuelos[st.a].fecha);
+    $('#tagB span').textContent = fmt(vuelos[st.b].fecha);
+    $('#tagB2 span').textContent = fmt(vuelos[st.b].fecha);
     $('#selA').value = st.a; $('#selB').value = st.b;
     linea(arrastrando);
-    $('#tagB2').textContent = tb;
 
-    history.replaceState(null, '', `#a=${vuelos[st.a].fecha}&b=${vuelos[st.b].fecha}&modo=${st.modo}`);
+    guardarHash();
     if (!arrastrando) { mapA.updateSize(); mapB.updateSize(); }
     mapA.render();
   }
 
-  // Línea de tiempo: un punto por vuelo, con los días transcurridos desde el vuelo anterior
-  const dias = (d1, d2) => Math.round((new Date(d2 + 'T12:00:00') - new Date(d1 + 'T12:00:00')) / 864e5);
-  const tl = $('#tl');
-  vuelos.forEach((v, i) => {
-    const b = document.createElement('button');
-    b.className = 'tl-stop'; b.dataset.i = i;
-    const gap = i ? `+${dias(vuelos[i - 1].fecha, v.fecha)} días` : 'inicio';
-    b.innerHTML = `<span class="tl-dot"></span><span class="tl-date"></span><span class="tl-name"></span><span class="tl-gap"></span>`;
-    b.querySelector('.tl-date').textContent = fmt(v.fecha);
-    b.querySelector('.tl-name').textContent = v.nombre || '';
-    b.querySelector('.tl-gap').textContent = gap;
-    b.title = `Día ${dias(vuelos[0].fecha, v.fecha)} desde el primer vuelo`;
-    b.onclick = () => ir(i);
-    tl.appendChild(b);
-  });
-  const rango = $('#tlRange');
-  const n = vuelos.length;
-  rango.max = Math.max(0, n - 1);
-  const ajustarRango = () => {
-    // El riel va del centro del primer punto al centro del último; la perilla mide 24 px
-    const w = tl.scrollWidth, paso = w / n;
-    rango.style.left = (paso / 2 - 12) + 'px';
-    rango.style.width = (w - paso + 24) + 'px';
-  };
-  new ResizeObserver(ajustarRango).observe(tl);
-  rango.hidden = n < 2;
-  rango.addEventListener('input', () => {
-    const v = +rango.value;
-    if (st.modo === 'dia') { st.t = v; st.b = Math.round(v); }
-    else { st.b = Math.round(v); st.t = st.b; if (st.a >= st.b) st.a = Math.max(0, st.b - 1); }
-    aplicar(true);
-  });
-  // Al soltar, si quedó muy cerca de un vuelo, se ajusta a él
-  rango.addEventListener('change', () => {
-    const v = +rango.value, r = Math.round(v);
-    if (st.modo !== 'dia' || Math.abs(v - r) < 0.12) ir(r);
-  });
-  function linea(arrastrando) {
-    const dia = st.modo === 'dia';
-    if (!arrastrando) rango.value = dia ? st.t : st.b;
-    rango.step = dia ? 0.01 : 1;
-    tl.querySelectorAll('.tl-stop').forEach(b => {
-      const i = +b.dataset.i;
-      b.classList.toggle('cur', dia && i === st.b);
-      b.classList.toggle('isA', !dia && i === st.a);
-      b.classList.toggle('isB', !dia && i === st.b);
-      b.setAttribute('aria-current', i === st.b ? 'true' : 'false');
-    });
-    const cur = tl.querySelector(`[data-i="${st.b}"]`);
-    if (cur && !arrastrando) cur.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    $('#prev').disabled = st.b <= 0; $('#next').disabled = st.b >= vuelos.length - 1;
-  }
-  // Ir a un vuelo: en "Un día" lo muestra; al comparar lo deja como B y A pasa a ser el vuelo anterior
-  function ir(i) {
-    i = Math.max(0, Math.min(vuelos.length - 1, i));
-    st.b = i; st.t = i;
-    if (st.modo !== 'dia' && st.a >= st.b) st.a = Math.max(0, st.b - 1);
-    showMsg(''); aplicar();
-  }
-  $('#prev').onclick = () => ir(st.t % 1 ? Math.floor(st.t) : st.b - 1);
-  $('#next').onclick = () => ir(st.t % 1 ? Math.ceil(st.t) : st.b + 1);
-  document.addEventListener('keydown', e => {
-    if (e.target.closest('select,input,.split')) return;
-    if (e.key === 'ArrowLeft') ir(st.b - 1);
-    if (e.key === 'ArrowRight') ir(st.b + 1);
-  });
-
   for (const [k, sel] of [['a', $('#selA')], ['b', $('#selB')]]) {
-    vuelos.forEach((v, i) => {
-      const o = new Option(fmt(v.fecha) + (v.nombre ? ' · ' + v.nombre : ''), i);
-      if (i === st[k]) o.selected = true;
-      sel.add(o);
-    });
-    sel.onchange = () => { st[k] = +sel.value; showMsg(''); aplicar(); };
+    vuelos.forEach((v, i) => sel.add(new Option(fmt(v.fecha) + (v.nombre ? ' · ' + v.nombre : ''), i)));
+    sel.onchange = () => { st[k] = +sel.value; if (k === 'b') st.t = st.b; showMsg(''); aplicar(); };
   }
   document.querySelectorAll('.seg button').forEach(b => b.onclick = () => {
     st.modo = b.dataset.mode;
-    // Al comparar, A y B deben ser vuelos distintos: si se pisan, B pasa al siguiente o A al anterior
     if (st.modo !== 'dia' && st.a >= st.b) {
-      if (st.b === 0 && vuelos.length > 1) { st.a = 0; st.b = 1; } else st.a = Math.max(0, st.b - 1);
+      if (st.b === 0 && n > 1) { st.a = 0; st.b = 1; } else st.a = Math.max(0, st.b - 1);
     }
     st.t = st.b; aplicar();
   });
   $('#opac').oninput = e => { st.opac = e.target.value / 100; if (st.a !== st.b) capas[st.b].setOpacity(st.opac); };
   $('#encuadrar').onclick = encuadrar;
   $('#copiar').onclick = async () => {
-    try { await navigator.clipboard.writeText(location.href); $('#copiar').textContent = 'Link copiado'; }
-    catch (e) { $('#copiar').textContent = 'Copia la URL del navegador'; }
-    setTimeout(() => $('#copiar').textContent = 'Copiar link', 2000);
+    try { await navigator.clipboard.writeText(location.href); $('#copiarTip').textContent = 'Link copiado'; }
+    catch (e) { $('#copiarTip').textContent = 'Copia la URL del navegador'; }
+    setTimeout(() => $('#copiarTip').textContent = 'Copiar link de esta vista', 2000);
   };
+  $('#prev').onclick = () => ir(st.t % 1 ? Math.floor(st.t) : st.b - 1);
+  $('#next').onclick = () => ir(st.t % 1 ? Math.ceil(st.t) : st.b + 1);
+  document.addEventListener('keydown', e => {
+    if (e.target.closest('select,input,.split,#perilla')) return;
+    if (e.key === 'ArrowLeft') ir(st.b - 1);
+    if (e.key === 'ArrowRight') ir(st.b + 1);
+  });
 
-  // Arrastre de la línea del deslizador
+  // Línea del deslizador A/B
   const split = $('#split');
-  let arrastrando = false;
-  split.addEventListener('pointerdown', e => { arrastrando = true; split.setPointerCapture(e.pointerId); e.stopPropagation(); });
+  let moviendo = false;
+  split.addEventListener('pointerdown', e => { moviendo = true; split.setPointerCapture(e.pointerId); e.stopPropagation(); });
   split.addEventListener('pointermove', e => {
-    if (!arrastrando) return;
+    if (!moviendo) return;
     const r = $('#mapA').getBoundingClientRect();
     st.split = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
     split.style.left = (st.split * 100) + '%'; mapA.render();
   });
-  split.addEventListener('pointerup', () => arrastrando = false);
+  split.addEventListener('pointerup', () => moviendo = false);
   split.addEventListener('keydown', e => {
     const d = e.key === 'ArrowLeft' ? -.02 : e.key === 'ArrowRight' ? .02 : 0;
     if (!d) return;
     st.split = Math.min(1, Math.max(0, st.split + d)); split.style.left = (st.split * 100) + '%'; mapA.render();
   });
 
-  st.t = st.b;
   aplicar();
   encuadrar();
 })();

@@ -39,6 +39,15 @@ def agregar(fecha, nombre, url):
     return len(cfg["vuelos"])
 
 
+def agregar_plano(nombre, url):
+    """Agrega un plano de diseño (GeoJSON) o reemplaza el que tenga el mismo nombre."""
+    cfg = leer()
+    planos = [p for p in cfg.get("planos", []) if p.get("nombre") != nombre]
+    planos.append({"nombre": nombre, "url": url})
+    cfg["planos"] = planos
+    guardar(cfg)
+
+
 if __name__ == "__main__":
     try:
         n = agregar(sys.argv[1], sys.argv[2], sys.argv[3])

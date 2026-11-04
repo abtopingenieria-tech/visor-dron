@@ -1,6 +1,7 @@
 name: Agregar vuelos
 
 # Se ejecuta a mano desde la pestaña Actions → "Agregar vuelo" → "Run workflow".
+# También acepta planos .dxf, que quedan como capa de diseño para superponer.
 # Descarga uno o varios ortomosaicos desde un link compartido, los convierte a COG liviano,
 # los sube a Cloudflare R2 y los agrega a vuelos.json (el sitio se actualiza solo).
 # Con una carpeta de Google Drive procesa todos los .tif; la fecha y el nombre salen del
@@ -9,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       link:
-        description: "Link compartido de un archivo .tif o de una CARPETA de Google Drive con varios"
+        description: "Link compartido de un .tif, un plano .dxf, o una CARPETA de Google Drive con varios"
         required: true
       fecha:
         description: "Fecha del vuelo (AAAA-MM-DD). Vacío = se toma del nombre del archivo. Se ignora con carpetas"
@@ -17,6 +18,10 @@ on:
         default: ""
       nombre:
         description: "Nombre corto (ej: Losa piso 1). Vacío = se toma del nombre del archivo. Se ignora con carpetas"
+        required: false
+        default: ""
+      epsg:
+        description: "Solo planos DXF: código EPSG de sus coordenadas (ej 32719). Vacío = el mismo de las ortofotos"
         required: false
         default: ""
       resolucion:
@@ -77,6 +82,7 @@ jobs:
           FECHA: ${{ inputs.fecha }}
           NOMBRE: ${{ inputs.nombre }}
           RES: ${{ inputs.resolucion }}
+          EPSG: ${{ inputs.epsg }}
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: auto

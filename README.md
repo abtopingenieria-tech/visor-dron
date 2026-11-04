@@ -57,6 +57,17 @@ Pasado eso, R2 cobra US$ 0,015 por GB al mes (100 GB ≈ US$ 1,5 al mes).
 Al convertir, el borde vacío del ortomosaico (negro o blanco puro, según el software) queda transparente para que se vea
 el mapa de fondo. Para vuelos subidos antes de este cambio: **Actions → Reparar bordes → Run workflow** (vacío = todos).
 
+## Plano de diseño (DXF)
+
+Para comparar la obra con el diseño, sube el `.dxf` con la misma acción **Agregar vuelos**
+(link al archivo, o déjalo dentro de la carpeta de Drive junto a las ortofotos). Se convierte a una
+capa liviana y aparece el botón de plano arriba a la derecha del visor, con color y opacidad.
+
+- El DXF debe estar en coordenadas reales (UTM), no en coordenadas locales de dibujo.
+- Si el campo **epsg** queda vacío se usa el mismo sistema de las ortofotos (por ejemplo 32719 = UTM 19S WGS84).
+- El nombre del plano sale del nombre del archivo. Subir otro con el mismo nombre lo reemplaza.
+- Se publican líneas, polilíneas y textos del espacio modelo; los bloques se dibujan explotados.
+
 ## Si tus ortomosaicos están en ECW: `convertir.bat`
 
 El ECW no se puede abrir en la nube, así que se convierte en tu computador (Windows):
