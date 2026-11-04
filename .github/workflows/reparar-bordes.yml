@@ -19,6 +19,9 @@ concurrency:
 
 env:
   R2_BUCKET: visor-dron
+  # La CLI de AWS reciente agrega checksums que R2 no acepta en subidas por partes (error InvalidPart)
+  AWS_REQUEST_CHECKSUM_CALCULATION: WHEN_REQUIRED
+  AWS_RESPONSE_CHECKSUM_VALIDATION: WHEN_REQUIRED
   R2_PUBLIC_URL: https://pub-85f1f1b1acc34a97a5cd365a422a5baa.r2.dev
 
 jobs:
@@ -57,7 +60,10 @@ jobs:
             echo "::group::$clave"
             aws s3 cp "s3://$R2_BUCKET/$clave" "trabajo/original.tif" --endpoint-url "$ep" --only-show-errors
             scripts/convertir.sh trabajo/original.tif "trabajo/$clave"
-            aws s3 cp "trabajo/$clave" "s3://$R2_BUCKET/$clave" --endpoint-url "$ep" --content-type image/tiff --only-show-errors
+            for intento in 1 2 3; do
+              aws s3 cp "trabajo/$clave" "s3://$R2_BUCKET/$clave" --endpoint-url "$ep" --content-type image/tiff --only-show-errors && break
+              [ "$intento" = 3 ] && exit 1; echo "Reintentando subida ($intento)…"; sleep 10
+            done
             rm -f trabajo/original.tif "trabajo/$clave"
             echo "- ✅ $clave" >> "$GITHUB_STEP_SUMMARY"
             echo "::endgroup::"

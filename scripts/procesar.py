@@ -8,7 +8,7 @@ R2_BUCKET, R2_PUBLIC_URL, R2_ACCOUNT_ID (+ credenciales AWS_* para la CLI de aws
   están en el visor se saltan.
 - Link a un archivo: usa FECHA/NOMBRE si vienen; si no, los saca del nombre del archivo.
 """
-import os, re, subprocess, sys, urllib.parse
+import os, re, subprocess, sys, time, urllib.parse
 from datetime import date
 from pathlib import Path
 
@@ -74,9 +74,15 @@ def es_geotiff(ruta):
 def publicar(archivo, fecha, nombre):
     salida = TRABAJO / f"{fecha}.tif"
     subprocess.run(["bash", "scripts/convertir.sh", str(archivo), str(salida), RES], check=True)
-    subprocess.run(["aws", "s3", "cp", str(salida), f"s3://{env('R2_BUCKET')}/{fecha}.tif",
-                    "--endpoint-url", f"https://{env('R2_ACCOUNT_ID')}.r2.cloudflarestorage.com",
-                    "--content-type", "image/tiff", "--only-show-errors"], check=True)
+    for intento in (1, 2, 3):  # R2 a veces rechaza una subida por partes; se reintenta
+        r = subprocess.run(["aws", "s3", "cp", str(salida), f"s3://{env('R2_BUCKET')}/{fecha}.tif",
+                            "--endpoint-url", f"https://{env('R2_ACCOUNT_ID')}.r2.cloudflarestorage.com",
+                            "--content-type", "image/tiff", "--only-show-errors"])
+        if r.returncode == 0:
+            break
+        if intento == 3:
+            raise RuntimeError("no se pudo subir a R2 después de 3 intentos")
+        print(f"Reintentando subida ({intento})…", flush=True); time.sleep(10)
     actualizar_vuelos.agregar(fecha, nombre, f"{env('R2_PUBLIC_URL')}/{fecha}.tif")
     for p in (archivo, salida):
         Path(p).unlink(missing_ok=True)

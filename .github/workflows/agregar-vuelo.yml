@@ -33,6 +33,9 @@ concurrency:
 
 env:
   R2_BUCKET: visor-dron
+  # La CLI de AWS reciente agrega checksums que R2 no acepta en subidas por partes (error InvalidPart)
+  AWS_REQUEST_CHECKSUM_CALCULATION: WHEN_REQUIRED
+  AWS_RESPONSE_CHECKSUM_VALIDATION: WHEN_REQUIRED
   R2_PUBLIC_URL: https://pub-85f1f1b1acc34a97a5cd365a422a5baa.r2.dev
 
 jobs:
